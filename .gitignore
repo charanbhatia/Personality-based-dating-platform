@@ -1,0 +1,41 @@
+# Documentation (keep only root README.md on GitHub)
+docs/
+
+# Markdown files except root README.md
+*.md
+!/README.md
+
+# Env and secrets (env.example is allowed)
+.env
+.env.local
+.env.*.local
+
+# Go
+backend/bin/
+*.exe
+*.test
+*.out
+vendor/
+
+# Node / React
+frontend/node_modules/
+frontend/dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build and cache
+*.log
+.cache/
