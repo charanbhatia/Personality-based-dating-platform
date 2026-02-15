@@ -43,20 +43,25 @@ bits-assignemnt/
 - Node.js 18+
 - PostgreSQL 15+
 
+### Database
+
+Create a database and run migrations:
+
+```bash
+createdb dating_platform   # or use your PostgreSQL client
+psql dating_platform -f backend/migrations/001_init.sql
+```
+
 ### Backend
 
 ```bash
 cd backend
-cp .env.example .env   # set DB URL, JWT secret
+cp env.example .env       # set DATABASE_URL, JWT_SECRET
 go mod download
 go run cmd/server/main.go
 ```
 
 API runs at `http://localhost:8080`.
-
-### Database
-
-Run the SQL in `docs/DATABASE_DESIGN.md` (Section 6) in your PostgreSQL database, or use the migrations in `backend/migrations` (if added).
 
 ### Frontend
 
@@ -66,7 +71,7 @@ npm install
 npm run dev
 ```
 
-App runs at `http://localhost:5173` (or port shown).
+App runs at `http://localhost:5173`. Set `VITE_API_URL=http://localhost:8080` if the API is elsewhere.
 
 ## API Overview (PoC)
 
@@ -77,8 +82,9 @@ App runs at `http://localhost:5173` (or port shown).
 - `PUT /api/profile` — Update profile
 - `GET /api/matches` — Get match recommendations
 - `GET /api/conversations` — List conversations
+- `POST /api/conversations` — Start conversation (body: `{"user_id": "uuid"}`)
 - `GET /api/conversations/:id/messages` — Get messages
-- `POST /api/conversations/:id/messages` — Send message
+- `POST /api/conversations/:id/messages` — Send message (body: `{"content": "..."}`)
 
 ## License
 

@@ -12,6 +12,7 @@ docs/
 
 # Go
 backend/bin/
+backend/server
 *.exe
 *.test
 *.out

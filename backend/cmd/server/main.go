@@ -8,9 +8,11 @@ import (
 	"github.com/bits-assignment/dating-platform/backend/internal/config"
 	"github.com/bits-assignment/dating-platform/backend/internal/db"
 	"github.com/bits-assignment/dating-platform/backend/internal/router"
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	_ = godotenv.Load()
 	cfg := config.Load()
 	if err := db.Init(cfg.DatabaseURL); err != nil {
 		log.Fatalf("database init: %v", err)
