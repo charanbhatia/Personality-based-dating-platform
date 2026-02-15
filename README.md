@@ -4,13 +4,6 @@ A dating platform that matches users based on **personality traits**, **values**
 
 ## Phase 2 — Design & Proof of Concept
 
-This repository contains the **Phase 2** deliverables:
-
-- **System architecture** — [docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md)
-- **Module-wise design** — [docs/MODULE_DESIGN.md](docs/MODULE_DESIGN.md)
-- **Technology stack justification** — [docs/TECHNOLOGY_STACK.md](docs/TECHNOLOGY_STACK.md)
-- **Database / data flow design** — [docs/DATABASE_DESIGN.md](docs/DATABASE_DESIGN.md)
-- **Proof of Concept (PoC)** — Backend (Go) + Frontend (React) + PostgreSQL
 
 ## Tech Stack
 
