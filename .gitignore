@@ -1,9 +1,9 @@
-# Documentation (keep only root README.md on GitHub)
-docs/
-
-# Markdown files except root README.md
+# Markdown: allow root README, TEAM_DOCS, and docs/ team ownership docs
 *.md
 !/README.md
+!/TEAM_DOCS.md
+!docs/
+!docs/**/*.md
 
 # Env and secrets (env.example is allowed)
 .env
