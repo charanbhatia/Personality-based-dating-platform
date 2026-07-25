@@ -1,3 +1,7 @@
+/* ============================================================
+   Kindred — Design System / Global Base
+   ============================================================ */
+
 *,
 *::before,
 *::after {
@@ -5,11 +9,59 @@
 }
 
 :root {
-  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-  line-height: 1.5;
+  /* ---- Palette ---- */
+  --bg-0: #07070d;
+  --bg-1: #0b0b16;
+  --bg-2: #10101f;
+
+  --surface: rgba(23, 23, 40, 0.55);
+  --surface-solid: #14142400;
+  --surface-strong: rgba(30, 30, 52, 0.72);
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.16);
+
+  --text: #ececf5;
+  --text-soft: #b7b7cc;
+  --text-dim: #7d7d99;
+
+  /* ---- Brand accents ---- */
+  --rose: #ff4d7d;
+  --pink: #ff6fae;
+  --violet: #a855f7;
+  --indigo: #6366f1;
+  --cyan: #22d3ee;
+  --amber: #fbbf24;
+  --green: #34d399;
+
+  /* ---- Signature gradients ---- */
+  --grad-brand: linear-gradient(120deg, #ff4d7d 0%, #b14bff 50%, #6366f1 100%);
+  --grad-brand-soft: linear-gradient(120deg, rgba(255, 77, 125, 0.18), rgba(99, 102, 241, 0.18));
+  --grad-warm: linear-gradient(135deg, #ff6fae 0%, #ff8a5c 100%);
+  --grad-aurora: linear-gradient(120deg, #22d3ee, #a855f7, #ff4d7d);
+
+  /* ---- Elevation ---- */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 14px 40px -12px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 30px 80px -24px rgba(0, 0, 0, 0.7);
+  --glow-brand: 0 10px 40px -8px rgba(177, 75, 255, 0.5);
+  --glow-rose: 0 12px 44px -10px rgba(255, 77, 125, 0.55);
+
+  /* ---- Radius ---- */
+  --r-sm: 10px;
+  --r-md: 16px;
+  --r-lg: 22px;
+  --r-xl: 30px;
+  --r-pill: 999px;
+
+  /* ---- Motion ---- */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  line-height: 1.6;
   font-weight: 400;
-  color: #e5e5e5;
-  background-color: #0d0d0d;
+  color: var(--text);
+  background-color: var(--bg-0);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -27,42 +79,97 @@ body,
 
 body {
   display: block;
-  min-width: 100vw;
+  min-width: 100%;
+  background:
+    radial-gradient(1100px 700px at 12% -8%, rgba(255, 77, 125, 0.14), transparent 60%),
+    radial-gradient(1000px 700px at 92% 0%, rgba(99, 102, 241, 0.16), transparent 55%),
+    radial-gradient(900px 900px at 80% 110%, rgba(34, 211, 238, 0.1), transparent 55%),
+    var(--bg-0);
+  background-attachment: fixed;
+  overflow-x: hidden;
 }
 
 #root {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  position: relative;
+  z-index: 1;
+}
+
+h1,
+h2,
+h3,
+h4,
+.font-display {
+  font-family: 'Sora', 'Inter', system-ui, sans-serif;
+  letter-spacing: -0.02em;
 }
 
 a {
-  color: #a78bfa;
+  color: var(--violet);
   text-decoration: none;
-  transition: color 0.2s ease;
+  transition: color 0.2s var(--ease-out);
 }
 a:hover {
-  color: #c4b5fd;
+  color: var(--pink);
 }
 
 button {
   font-family: inherit;
   cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.2s ease;
+  transition: transform 0.18s var(--ease-spring), box-shadow 0.25s var(--ease-out),
+    background 0.25s var(--ease-out), filter 0.25s var(--ease-out);
 }
-button:hover:not(:disabled) {
-  transform: translateY(-1px);
-}
-button:active:not(:disabled) {
-  transform: translateY(0);
-}
-button:focus-visible {
-  outline: 2px solid #a78bfa;
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--violet);
   outline-offset: 2px;
 }
 
 input,
-textarea {
+textarea,
+select {
   font-family: inherit;
   font-size: 1rem;
+}
+
+/* Text gradient helper */
+.text-gradient {
+  background: var(--grad-brand);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(168, 85, 247, 0.35);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(168, 85, 247, 0.6);
+  background-clip: padding-box;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }

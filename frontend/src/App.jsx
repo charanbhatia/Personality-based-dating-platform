@@ -1,5 +1,22 @@
-import { BrowserRouter, Routes, Route, Navigate, useLocation, Link } from 'react-router-dom';
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  useLocation,
+  Link,
+  NavLink,
+} from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import BackgroundFX from './components/BackgroundFX';
+import {
+  IconHeart,
+  IconUser,
+  IconCompass,
+  IconChat,
+  IconLogout,
+  IconArrowLeft,
+} from './components/Icons';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
@@ -11,9 +28,31 @@ import Chat from './pages/Chat';
 import StartConversation from './pages/StartConversation';
 import './App.css';
 
+function Brand() {
+  return (
+    <Link to="/" className="brand">
+      <span className="brand-mark">
+        <IconHeart />
+      </span>
+      <span className="brand-name">
+        <b>Kin</b>
+        <span>dred</span>
+      </span>
+    </Link>
+  );
+}
+
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
-  if (loading) return <div className="app-shell"><div className="loading-page">Loading...</div></div>;
+  if (loading)
+    return (
+      <div className="app-shell">
+        <div className="loading-page">
+          <div className="spinner" />
+          <p>Getting things ready…</p>
+        </div>
+      </div>
+    );
   if (!user) return <Navigate to="/login" replace />;
   return children;
 }
@@ -22,24 +61,45 @@ function Layout({ children }) {
   const { user, logout } = useAuth();
   const location = useLocation();
   const isHome = location.pathname === '/';
-  const showBack = !isHome && location.pathname !== '/login' && location.pathname !== '/register';
+  const showBack = !isHome;
 
-  const backLabel = () => {
+  const backTarget = () => {
     if (location.pathname.startsWith('/conversations/')) return { to: '/conversations', label: 'Back to messages' };
     if (location.pathname.startsWith('/matches/')) return { to: '/matches', label: 'Back to matches' };
-    if (location.pathname === '/profile' || location.pathname === '/matches' || location.pathname === '/conversations') return { to: '/', label: 'Back to home' };
     return { to: '/', label: 'Back to home' };
   };
 
   return (
     <div className="app-shell">
       <header className="app-header">
-        <Link to="/" className="brand">Dating Platform</Link>
+        <Brand />
+        <nav className="header-nav">
+          <NavLink to="/" end className="nav-item">
+            <IconCompass />
+            <span>Home</span>
+          </NavLink>
+          <NavLink to="/matches" className="nav-item">
+            <IconHeart />
+            <span>Matches</span>
+          </NavLink>
+          <NavLink to="/conversations" className="nav-item">
+            <IconChat />
+            <span>Messages</span>
+          </NavLink>
+          <NavLink to="/profile" className="nav-item">
+            <IconUser />
+            <span>Profile</span>
+          </NavLink>
+        </nav>
         <div className="header-right">
           {user && (
             <>
-              <span className="user-name">{user.name}</span>
-              <button type="button" className="btn-logout" onClick={logout}>Logout</button>
+              <span className="user-chip">
+                <span className="user-name">{user.name || user.email}</span>
+              </span>
+              <button type="button" className="btn-logout" onClick={logout} title="Log out">
+                <IconLogout />
+              </button>
             </>
           )}
         </div>
@@ -47,10 +107,14 @@ function Layout({ children }) {
       <main className="app-main">
         {showBack && (
           <div className="back-bar">
-            <Link to={backLabel().to} className="btn-back">← {backLabel().label}</Link>
+            <Link to={backTarget().to} className="btn-back">
+              <IconArrowLeft /> {backTarget().label}
+            </Link>
           </div>
         )}
-        {children}
+        <div key={location.pathname} className="route-fade">
+          {children}
+        </div>
       </main>
     </div>
   );
@@ -126,6 +190,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <BackgroundFX />
         <AppRoutes />
       </AuthProvider>
     </BrowserRouter>

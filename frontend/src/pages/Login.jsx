@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import AuthShell from '../components/AuthShell';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -29,33 +30,44 @@ export default function Login() {
   }
 
   return (
-    <div className="auth-wrap">
+    <AuthShell>
       <div className="auth-page">
-        <h1>Log in</h1>
+        <h1>Welcome back</h1>
+        <p className="auth-sub">Log in to pick up where your connections left off.</p>
         <form onSubmit={handleSubmit}>
-          {error && <p className="error">{error}</p>}
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-          <button type="submit" disabled={loading}>
-            {loading ? 'Logging in...' : 'Log in'}
+          {error && <p className="alert alert-error error">{error}</p>}
+          <div className="field">
+            <label htmlFor="email">Email</label>
+            <input
+              id="email"
+              className="input"
+              type="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="password">Password</label>
+            <input
+              id="password"
+              className="input"
+              type="password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+          </div>
+          <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
+            {loading ? 'Logging in…' : 'Log in'}
           </button>
         </form>
         <p className="auth-footer">
-          Don't have an account? <Link to="/register">Sign up</Link>
+          New to Kindred? <Link to="/register">Create an account</Link>
         </p>
       </div>
-    </div>
+    </AuthShell>
   );
 }
