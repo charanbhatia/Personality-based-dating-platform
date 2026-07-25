@@ -15,8 +15,9 @@ export default function StartConversation() {
   }, [userId, navigate]);
 
   return (
-    <div className="page redirect-msg">
-      <p>Starting conversation...</p>
+    <div className="loading-page">
+      <div className="spinner" />
+      <p>Starting your conversation…</p>
     </div>
   );
 }
