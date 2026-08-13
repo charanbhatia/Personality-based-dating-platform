@@ -15,6 +15,11 @@ This document is the complete backend playbook for Person B: gap analysis, featu
 
 ## 2. Current backend baseline (your domain)
 
+> **Status:** the table below is the original gap analysis, kept for context. Most
+> of it is now built — see the [milestone checklist](#9-milestone-checklist-b) for
+> what is done and what is still blocked, and
+> [PERSON_B_API.md](./PERSON_B_API.md) for the implemented contract.
+
 | Area | Exists | Gap |
 |------|--------|-----|
 | Register / login | JWT HS256 24h, bcrypt | No refresh, logout revoke, password reset, sessions |
@@ -438,49 +443,90 @@ Write event in same transaction as match; C’s publisher worker drains outbox (
 
 ## 8. Testing plan (B)
 
-| Layer | Cases |
-|-------|--------|
-| Unit | Similarity / weighted score; cursor encode/decode; trait normalize |
-| Integration | Register→quiz→prefs→discover order; like→mutual match→event; block excludes; refresh rotate; reset password |
-| Regression | Public DTOs contain no `email` field |
+| Layer | Cases | Where |
+|-------|--------|-------|
+| Unit | Similarity / weighted score; cursor encode/decode; trait normalize; token issue/verify; password policy; request decoding and validation; cache expiry and eviction; config validation | alongside each package, e.g. `internal/domain/traits_test.go`, `internal/matching/cursor_test.go`, `internal/auth/token_test.go` |
+| Routing | 404 vs 405 with `Allow`; every route reaches its handler; CORS allowlist | `internal/router/router_test.go` |
+| Integration | Register→quiz→prefs→discover order; like→mutual match→event; concurrent mutual likes; block excludes; refresh rotate and replay; reset password | `internal/integration/` |
+| Regression | Public DTOs contain no `email` field, on both the v1 and legacy mounts | `internal/integration/discover_test.go`, `legacy_test.go` |
 
-Use `go test` with testcontainers or a dockerized Postgres in CI (C sets up CI; you write tests).
+Run unit tests with `go test ./...`. The integration suite needs a real Postgres
+and skips itself unless `TEST_DATABASE_URL` is set; it truncates the tables it
+uses, so point it at a throwaway database. C owns CI and should add
+`go test -race`, which needs a cgo toolchain.
+
+Two details worth knowing before adding integration tests:
+
+- The seeded question bank is balanced (equal forward and reverse items per
+  trait), so answering every question with the same value always scores 0.5 on
+  every trait. Use the level-based fixtures in `client_test.go`
+  (`submitAssessmentPerTrait`, `traitValueForLevel`) when a test needs distinct
+  trait values.
+- Tests share one database and run sequentially; `resetDB` truncates between
+  them. Do not add `t.Parallel()` to a test that asserts on the contents of the
+  discovery feed.
 
 ---
 
 ## 9. Milestone checklist (B)
 
+Implemented endpoints and their exact contracts are in
+[PERSON_B_API.md](./PERSON_B_API.md).
+
 ### M1
 
-- [ ] `/api/v1/auth/*` access + refresh + logout + me flags
-- [ ] Profile GET/PUT (interests)
-- [ ] Preferences GET/PUT
-- [ ] Assessment GET/submit + seed questions
-- [ ] Personality GET me
-- [ ] Remove email from any candidate DTO still under `/api/matches` shim or v1 discover preview
-- [ ] Migrations applied; env documented for token TTLs
+- [x] `/api/v1/auth/*` access + refresh + logout + me flags — rotation with reuse
+      detection, session list/revoke, password reset
+- [x] Profile GET/PUT (interests) — merge semantics, canonical genders
+- [x] Preferences GET/PUT — replace semantics, validated bounds
+- [x] Assessment GET/submit + seed questions — 30 balanced Big Five items in
+      migration 004
+- [x] Personality GET me
+- [x] Remove email from any candidate DTO still under `/api/matches` shim or v1
+      discover preview — public payloads share one `PublicProfile` type that has
+      no email field, so a new endpoint cannot reintroduce the leak
+- [x] Migrations applied; env documented for token TTLs — see
+      [`backend/env.example`](../backend/env.example)
 
 ### M2
 
-- [ ] Discover scored + filtered + cursor
-- [ ] Likes/pass + mutual match + `match.created`
-- [ ] Match list
-- [ ] Profile photos integration with C URLs
-- [ ] Trait Redis cache
-- [ ] Integration tests for match path
+- [x] Discover scored + filtered + cursor — scored in SQL, keyset cursor
+- [x] Likes/pass + mutual match + `match.created` — advisory-locked, so
+      concurrent mutual likes create exactly one match and one event
+- [x] Match list
+- [x] Profile photos gallery with URL safety rules
+- [ ] Profile photos integration with C URLs — blocked on C's media service;
+      `asset_ids` returns `501 media_unavailable` and relative `/media/...` paths
+      are already accepted
+- [ ] Trait Redis cache — blocked on C's Redis. The `cache.Cache` port is in
+      place with an in-process LRU behind it; swapping the implementation is a
+      one-line change in `internal/app`
+- [x] Integration tests for match path
 
 ### M3
 
-- [ ] Block/report + `user.blocked`
-- [ ] Retake rules
-- [ ] Query/index tuning from explain analyze
-- [ ] Password reset full path with C email stub
+- [x] Block/report + `user.blocked`
+- [x] Retake rules — interval enforced, cache invalidated on retake
+- [x] Password reset full path with C email stub — emits
+      `auth.password_reset_requested`; C's mailer consumes it
+- [ ] Query/index tuning from explain analyze — indexes are in place from the
+      migrations, but not yet validated against a realistic data volume
 
 ### M4
 
 - [ ] Load-test discover; document results
-- [ ] Cache hit metrics
+- [ ] Cache hit metrics — needs C's metrics pipeline
 - [ ] Outbox reliability verified under worker restart
+
+### Verification status
+
+| Check | State |
+|-------|-------|
+| `go build ./...`, `go vet ./...` | Clean |
+| Unit tests (`domain`, `httpx`, `auth`, `personality`, `matching`, `cache`, `config`, `router`) | Passing |
+| Integration tests against real Postgres | Passing — auth, profile, personality, preferences, discovery, matching, legacy compatibility |
+| `go test -race` | **Not yet run.** Needs a cgo toolchain, which the current Windows dev box lacks; it should run in C's Linux CI. The concurrency-sensitive paths (mutual match, outbox drainer, trait cache) do have concurrent test coverage, but without the detector |
+| `gofmt -l` | Clean on content. Every file in the repo uses CRLF, which `gofmt` reports as unformatted; a `.gitattributes` with `*.go text eol=lf` is the fix and is C's call as CI owner |
 
 ---
 
@@ -522,6 +568,8 @@ If you need a platform capability, open a request for C with feature ID.
 
 ## 13. References
 
+- Implemented API contract: [PERSON_B_API.md](./PERSON_B_API.md)
+- Configuration reference: [`backend/env.example`](../backend/env.example)
 - Shared roadmap: [00_SHARED_ROADMAP.md](./00_SHARED_ROADMAP.md)
 - Frontend consumer: [PERSON_A_FRONTEND.md](./PERSON_A_FRONTEND.md)
 - Infra & messaging: [PERSON_C_BACKEND.md](./PERSON_C_BACKEND.md)
