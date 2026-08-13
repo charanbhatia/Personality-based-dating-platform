@@ -91,7 +91,7 @@ export default function Landing() {
       <section className="lp-hero">
         <span className="section-kicker"><IconSpark /> Personality-first dating</span>
         <h1>
-          Meet minds,<br />not just <span className="text-gradient">faces.</span>
+          Meet minds,<br />not just <span className="text-accent">faces.</span>
         </h1>
         <p className="lp-hero-sub">
           Kindred matches you on how you actually think — your traits, your values, what you

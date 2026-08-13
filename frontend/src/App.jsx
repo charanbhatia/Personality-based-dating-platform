@@ -10,7 +10,6 @@ import {
   NavLink,
 } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import BackgroundFX from './components/BackgroundFX';
 import Brand from './components/Brand';
 import Loading from './components/Loading';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -192,7 +191,6 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <BackgroundFX />
         <AppRoutes />
       </AuthProvider>
     </BrowserRouter>

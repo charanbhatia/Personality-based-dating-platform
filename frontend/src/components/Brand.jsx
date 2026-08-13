@@ -11,7 +11,7 @@ export default function Brand({ to = '/app' }) {
       </span>
       <span className="brand-name">
         <b>Kin</b>
-        <span className="text-gradient">dred</span>
+        <span>dred</span>
       </span>
     </Link>
   );

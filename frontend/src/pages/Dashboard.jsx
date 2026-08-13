@@ -47,7 +47,7 @@ export default function Dashboard() {
 
       <div className="feature-grid stagger">
         {features.map((f) => (
-          <TiltCard key={f.to} max={9}>
+          <TiltCard key={f.to}>
             <Link to={f.to} className="feature-card">
               <span className="feature-icon">{f.icon}</span>
               <h3>{f.title}</h3>

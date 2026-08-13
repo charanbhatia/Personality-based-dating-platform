@@ -11,7 +11,7 @@ export default function AuthShell({ children }) {
 
         <div className="auth-hero">
           <h2>
-            Meet minds,<br />not just <span className="text-gradient">faces.</span>
+            Meet minds,<br />not just <span className="text-accent">faces.</span>
           </h2>
           <p>
             Kindred pairs you on personality, values and the way you think — so every
