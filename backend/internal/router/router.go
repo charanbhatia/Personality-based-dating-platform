@@ -10,6 +10,7 @@ import (
 	"github.com/bits-assignment/dating-platform/backend/internal/media"
 	"github.com/bits-assignment/dating-platform/backend/internal/messaging"
 	"github.com/bits-assignment/dating-platform/backend/internal/middleware"
+	"github.com/bits-assignment/dating-platform/backend/internal/notifications"
 	"github.com/bits-assignment/dating-platform/backend/internal/platform/config"
 	"github.com/bits-assignment/dating-platform/backend/internal/platform/health"
 	"github.com/bits-assignment/dating-platform/backend/internal/platform/httpx"
@@ -130,6 +131,11 @@ func New(deps Deps) (http.Handler, error) {
 		KeyByUserID: true,
 		Log:         log,
 	})).RegisterRoutes(v1Protected)
+
+	notifications.NewHandler(
+		notifications.NewServiceFromConfig(pool, deps.Redis, cfg, log),
+		log,
+	).RegisterRoutes(v1Protected)
 
 	api := r.PathPrefix("/api").Subrouter()
 	api.Use(globalRateLimit)

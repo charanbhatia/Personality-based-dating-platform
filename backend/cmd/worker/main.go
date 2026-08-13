@@ -10,12 +10,14 @@ import (
 
 	"github.com/bits-assignment/dating-platform/backend/internal/db"
 	"github.com/bits-assignment/dating-platform/backend/internal/media"
+	"github.com/bits-assignment/dating-platform/backend/internal/notifications"
 	"github.com/bits-assignment/dating-platform/backend/internal/platform/config"
 	"github.com/bits-assignment/dating-platform/backend/internal/platform/events"
 	"github.com/bits-assignment/dating-platform/backend/internal/platform/logging"
 	"github.com/bits-assignment/dating-platform/backend/internal/platform/queue"
 	platformredis "github.com/bits-assignment/dating-platform/backend/internal/platform/redis"
 	"github.com/joho/godotenv"
+	goredis "github.com/redis/go-redis/v9"
 )
 
 // consumer binds a handler to a stream. Domain packages register theirs in
@@ -53,7 +55,7 @@ func main() {
 	defer redisClient.Close()
 
 	q := queue.New(redisClient, log, cfg.QueueMaxLen)
-	consumers, err := registerConsumers(cfg, q, log)
+	consumers, err := registerConsumers(cfg, q, redisClient, log)
 	if err != nil {
 		log.Error("consumer registration failed", "error", err)
 		os.Exit(1)
@@ -91,7 +93,7 @@ func main() {
 	log.Info("worker stopped")
 }
 
-func registerConsumers(cfg *config.Config, q *queue.Queue, log *slog.Logger) ([]consumer, error) {
+func registerConsumers(cfg *config.Config, q *queue.Queue, redisClient *goredis.Client, log *slog.Logger) ([]consumer, error) {
 	var consumers []consumer
 
 	if cfg.MediaEnabled() {
@@ -107,6 +109,20 @@ func registerConsumers(cfg *config.Config, q *queue.Queue, log *slog.Logger) ([]
 	} else {
 		log.Warn("object storage not configured; media processing disabled")
 	}
+
+	notificationSvc := notifications.NewServiceFromConfig(db.Pool, redisClient, cfg, log)
+	consumers = append(consumers,
+		consumer{
+			stream:  events.StreamNotifications,
+			group:   "notification-workers",
+			handler: notifications.NotificationsHandler(notificationSvc, log),
+		},
+		consumer{
+			stream:  events.StreamEmail,
+			group:   "email-workers",
+			handler: notifications.EmailHandler(notificationSvc, log),
+		},
+	)
 
 	return consumers, nil
 }
