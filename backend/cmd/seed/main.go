@@ -4,8 +4,9 @@
 // preferences — because a user missing any of those is not discoverable, which
 // made the previous seed data produce an empty feed.
 //
-//	go run ./cmd/seed              # create or refresh 55 demo users
+//	go run ./cmd/seed              # 55 demo users + 10 matched conversations
 //	go run ./cmd/seed -users 200   # different volume
+//	go run ./cmd/seed -matches 0   # users only
 //	go run ./cmd/seed -reset       # delete seeded users first
 package main
 
@@ -125,18 +126,19 @@ var locations = []string{
 func main() {
 	users := flag.Int("users", 55, "number of demo users to create")
 	reset := flag.Bool("reset", false, "delete existing seeded users before inserting")
+	pairs := flag.Int("matches", 10, "number of matched pairs (and conversations) to create among the first 2N users")
 	flag.Parse()
 
 	_ = godotenv.Load()
 	logging.Setup(os.Getenv("LOG_LEVEL"), os.Getenv("LOG_FORMAT"))
 
-	if err := run(*users, *reset); err != nil {
+	if err := run(*users, *reset, *pairs); err != nil {
 		slog.Error("seed failed", "error", err)
 		os.Exit(1)
 	}
 }
 
-func run(userCount int, reset bool) error {
+func run(userCount int, reset bool, pairCount int) error {
 	if userCount < 1 {
 		return fmt.Errorf("users must be at least 1")
 	}
@@ -202,6 +204,18 @@ func run(userCount int, reset bool) error {
 		"password", seedPassword,
 		"example_login", fmt.Sprintf(seedEmailPattern, 1),
 	)
+
+	if pairCount > 0 {
+		matched, convos, err := seedMatches(ctx, pool, userCount, pairCount)
+		if err != nil {
+			return err
+		}
+		slog.Info("seeded matches",
+			"pairs", matched,
+			"conversations", convos,
+			"try", fmt.Sprintf("%s / %s (password %s)", fmt.Sprintf(seedEmailPattern, 1), fmt.Sprintf(seedEmailPattern, 2), seedPassword),
+		)
+	}
 	return nil
 }
 
@@ -356,3 +370,117 @@ func insertPerson(ctx context.Context, pool *pgxpool.Pool, p person, passwordHas
 	})
 	return inserted, err
 }
+
+func tableExists(ctx context.Context, pool *pgxpool.Pool, name string) (bool, error) {
+	var ok bool
+	err := pool.QueryRow(ctx, `SELECT to_regclass($1) IS NOT NULL`, "public."+name).Scan(&ok)
+	return ok, err
+}
+
+func lookupSeededUser(ctx context.Context, pool *pgxpool.Pool, index int) (uuid.UUID, error) {
+	var id uuid.UUID
+	err := pool.QueryRow(ctx, `SELECT id FROM users WHERE email = $1`, fmt.Sprintf(seedEmailPattern, index)).Scan(&id)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("lookup %s: %w", fmt.Sprintf(seedEmailPattern, index), err)
+	}
+	return id, nil
+}
+
+func orderPair(a, b uuid.UUID) (uuid.UUID, uuid.UUID) {
+	if a.String() < b.String() {
+		return a, b
+	}
+	return b, a
+}
+
+// seedMatches creates reciprocal likes, match rows and a conversation with one
+// message for the first 2N seeded users so the messaging and match APIs have
+// something to show without a manual swipe session.
+func seedMatches(ctx context.Context, pool *pgxpool.Pool, userCount, pairCount int) (int, int, error) {
+	hasMatches, err := tableExists(ctx, pool, "matches")
+	if err != nil {
+		return 0, 0, err
+	}
+	if !hasMatches {
+		slog.Warn("matches table missing; skip -matches (run migrations first)")
+		return 0, 0, nil
+	}
+
+	maxPairs := userCount / 2
+	if pairCount > maxPairs {
+		pairCount = maxPairs
+	}
+
+	hasConversations, err := tableExists(ctx, pool, "conversations")
+	if err != nil {
+		return 0, 0, err
+	}
+
+	matched, convos := 0, 0
+	for i := 0; i < pairCount; i++ {
+		a, err := lookupSeededUser(ctx, pool, 2*i+1)
+		if err != nil {
+			return matched, convos, err
+		}
+		b, err := lookupSeededUser(ctx, pool, 2*i+2)
+		if err != nil {
+			return matched, convos, err
+		}
+
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO swipes (from_user_id, to_user_id, action)
+			VALUES ($1, $2, 'like'), ($2, $1, 'like')
+			ON CONFLICT (from_user_id, to_user_id) DO NOTHING`, a, b); err != nil {
+			return matched, convos, fmt.Errorf("seed swipes: %w", err)
+		}
+
+		first, second := orderPair(a, b)
+		var matchID uuid.UUID
+		err = pool.QueryRow(ctx, `
+			INSERT INTO matches (user_a_id, user_b_id, compatibility_score)
+			VALUES ($1, $2, 0.82)
+			ON CONFLICT (user_a_id, user_b_id) DO UPDATE SET compatibility_score = matches.compatibility_score
+			RETURNING id`, first, second).Scan(&matchID)
+		if err != nil {
+			return matched, convos, fmt.Errorf("seed match: %w", err)
+		}
+		matched++
+
+		if !hasConversations {
+			continue
+		}
+
+		var convID uuid.UUID
+		err = pool.QueryRow(ctx, `
+			INSERT INTO conversations (user1_id, user2_id, match_id, last_message_at, last_message_preview)
+			VALUES ($1, $2, $3, now(), $4)
+			ON CONFLICT (user1_id, user2_id) DO UPDATE SET match_id = COALESCE(conversations.match_id, EXCLUDED.match_id)
+			RETURNING id`, first, second, matchID, "Hey — matched on Kindred.").Scan(&convID)
+		if err != nil {
+			// Older conversations tables have no unique (user1,user2) or match_id.
+			err = pool.QueryRow(ctx, `
+				SELECT id FROM conversations
+				WHERE (user1_id = $1 AND user2_id = $2) OR (user1_id = $2 AND user2_id = $1)
+				LIMIT 1`, first, second).Scan(&convID)
+			if err != nil {
+				err = pool.QueryRow(ctx, `
+					INSERT INTO conversations (user1_id, user2_id)
+					VALUES ($1, $2) RETURNING id`, first, second).Scan(&convID)
+			}
+			if err != nil {
+				return matched, convos, fmt.Errorf("seed conversation: %w", err)
+			}
+		}
+		convos++
+
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO messages (conversation_id, sender_id, content)
+			SELECT $1, $2, $3
+			WHERE NOT EXISTS (SELECT 1 FROM messages WHERE conversation_id = $1)`,
+			convID, a, "Hey — matched on Kindred. Want to grab coffee?"); err != nil {
+			return matched, convos, fmt.Errorf("seed message: %w", err)
+		}
+	}
+	return matched, convos, nil
+}
+

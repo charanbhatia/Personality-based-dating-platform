@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -18,8 +19,14 @@ import (
 	"github.com/bits-assignment/dating-platform/backend/internal/db"
 	"github.com/bits-assignment/dating-platform/backend/internal/logging"
 	"github.com/bits-assignment/dating-platform/backend/internal/migrate"
+	"github.com/bits-assignment/dating-platform/backend/internal/outbox"
+	"github.com/bits-assignment/dating-platform/backend/internal/platform/events"
+	platformlog "github.com/bits-assignment/dating-platform/backend/internal/platform/logging"
+	"github.com/bits-assignment/dating-platform/backend/internal/platform/queue"
+	platformredis "github.com/bits-assignment/dating-platform/backend/internal/platform/redis"
 	"github.com/bits-assignment/dating-platform/backend/migrations"
 	"github.com/joho/godotenv"
+	goredis "github.com/redis/go-redis/v9"
 )
 
 func main() {
@@ -37,18 +44,16 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
+	log := platformlog.New(cfg.LogLevel)
 
-	// Signal-aware root context: Ctrl-C or SIGTERM begins a graceful shutdown
-	// rather than dropping in-flight requests.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	pool, err := db.Connect(ctx, cfg.DatabaseURL, db.Options{MaxConns: cfg.DBMaxConns})
+	pool, err := db.Connect(ctx, cfg.DatabaseURL, db.Options{MaxConns: cfg.DBMaxConns, MinConns: cfg.DBMinConns})
 	if err != nil {
 		return err
 	}
 	defer pool.Close()
-	// Kept for the packages that still read the package-level pool.
 	db.Pool = pool
 	slog.Info("database connected", "max_conns", pool.Config().MaxConns)
 
@@ -62,7 +67,28 @@ func run() error {
 		}
 	}
 
-	application, err := app.New(cfg, pool, app.Options{})
+	var redisClient *goredis.Client
+	if cfg.RedisEnabled() {
+		client, err := platformredis.New(ctx, cfg.RedisURL)
+		if err != nil {
+			return fmt.Errorf("redis: %w", err)
+		}
+		redisClient = client
+		defer redisClient.Close()
+		slog.Info("redis connected")
+	} else {
+		slog.Warn("redis not configured; rate limiting, queues and cross-replica websocket fanout are disabled")
+	}
+
+	opts := app.Options{
+		Redis:  redisClient,
+		Logger: log,
+	}
+	if redisClient != nil {
+		opts.Publisher = redisOutboxPublisher{queue.New(redisClient, log, cfg.QueueMaxLen)}
+	}
+
+	application, err := app.New(cfg, pool, opts)
 	if err != nil {
 		return err
 	}
@@ -72,9 +98,7 @@ func run() error {
 		Addr:              ":" + cfg.Port,
 		Handler:           application.Handler,
 		ReadHeaderTimeout: cfg.ReadHeaderTimeout,
-		// No WriteTimeout: it would also cap long-lived responses, which Person C's
-		// WebSocket upgrade will need on this same server.
-		IdleTimeout: 2 * time.Minute,
+		IdleTimeout:       2 * time.Minute,
 	}
 
 	serverErrors := make(chan error, 1)
@@ -98,8 +122,6 @@ func run() error {
 		slog.Info("shutdown signal received", "timeout", cfg.ShutdownTimeout)
 	}
 
-	// Stop accepting new work and let in-flight requests finish before the
-	// background workers and the pool go away.
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 	defer cancel()
 	if err := server.Shutdown(shutdownCtx); err != nil {
@@ -111,9 +133,6 @@ func run() error {
 	return nil
 }
 
-// autoMigrate reports whether the server should apply migrations at boot.
-// Enabled by default so a fresh clone works with one command; set
-// AUTO_MIGRATE=false where a deployment applies them as a separate step.
 func autoMigrate() bool {
 	switch strings.ToLower(strings.TrimSpace(os.Getenv("AUTO_MIGRATE"))) {
 	case "false", "0", "no":
@@ -121,4 +140,25 @@ func autoMigrate() bool {
 	default:
 		return true
 	}
+}
+
+// redisOutboxPublisher bridges B's outbox rows onto C's Redis Streams so
+// notifications and email workers see match.created and password-reset events.
+type redisOutboxPublisher struct {
+	q *queue.Queue
+}
+
+func (p redisOutboxPublisher) Publish(ctx context.Context, event outbox.Event) error {
+	var payload any
+	if len(event.Payload) > 0 {
+		if err := json.Unmarshal(event.Payload, &payload); err != nil {
+			return err
+		}
+	}
+	stream := events.StreamNotifications
+	if event.Type == outbox.EventPasswordResetRequired {
+		stream = events.StreamEmail
+	}
+	_, err := p.q.Publish(ctx, stream, event.Type, payload)
+	return err
 }

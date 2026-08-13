@@ -24,6 +24,7 @@ import (
 	"github.com/bits-assignment/dating-platform/backend/internal/repository"
 	"github.com/bits-assignment/dating-platform/backend/internal/router"
 	"github.com/jackc/pgx/v5/pgxpool"
+	goredis "github.com/redis/go-redis/v9"
 )
 
 // sessionSweepInterval controls how often expired sessions are deleted.
@@ -41,6 +42,10 @@ type Options struct {
 	// Media resolves upload asset ids to URLs. Nil means PUT /profile/photos
 	// accepts URLs only.
 	Media profile.MediaResolver
+	// Redis is optional. When set, the router enables rate limits, queues and WS fanout.
+	Redis *goredis.Client
+	// Logger is passed to Person C's platform middleware. Nil uses slog.Default.
+	Logger *slog.Logger
 	// Now overrides the clock, for tests.
 	Now func() time.Time
 }
@@ -137,8 +142,9 @@ func New(cfg *config.Config, pool *pgxpool.Pool, opts Options) (*App, error) {
 		return nil, err
 	}
 
-	handler := router.New(router.Deps{
+	handler, err := router.New(router.Deps{
 		Config:      cfg,
+		Pool:        pool,
 		Tokens:      tokens,
 		Auth:        authService,
 		Profile:     profileService,
@@ -146,7 +152,12 @@ func New(cfg *config.Config, pool *pgxpool.Pool, opts Options) (*App, error) {
 		Preferences: preferencesService,
 		Matching:    matchingService,
 		ProfileRepo: repository.NewProfileRepo(pool),
+		Redis:       opts.Redis,
+		Logger:      opts.Logger,
 	})
+	if err != nil {
+		return nil, err
+	}
 
 	return &App{
 		Config:      cfg,
