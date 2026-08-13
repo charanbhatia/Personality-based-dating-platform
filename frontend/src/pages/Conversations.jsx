@@ -1,30 +1,18 @@
-import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { conversations as convApi } from '../api';
+import useFetch from '../hooks/useFetch';
 import Avatar from '../components/Avatar';
+import Loading from '../components/Loading';
+import ErrorState from '../components/ErrorState';
 import { IconChat, IconArrowLeft } from '../components/Icons';
 
 export default function Conversations() {
   const { user } = useAuth();
-  const [list, setList] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { data, error, loading, retry } = useFetch(() => convApi.list());
+  const list = data?.conversations || [];
 
-  useEffect(() => {
-    convApi
-      .list()
-      .then((res) => setList(res.data.conversations || []))
-      .catch(() => setList([]))
-      .finally(() => setLoading(false));
-  }, []);
-
-  if (loading)
-    return (
-      <div className="loading-page">
-        <div className="spinner" />
-        <p>Loading messages…</p>
-      </div>
-    );
+  if (loading) return <Loading text="Loading messages…" />;
 
   return (
     <div className="page">
@@ -34,7 +22,9 @@ export default function Conversations() {
       <h1>Your conversations</h1>
       <p>Meaningful chats with the people you've matched with.</p>
 
-      {list.length === 0 ? (
+      {error ? (
+        <ErrorState text="We couldn't load your conversations right now." onRetry={retry} />
+      ) : list.length === 0 ? (
         <div className="empty-state">
           <span className="empty-icon"><IconChat /></span>
           <h3>No conversations yet</h3>

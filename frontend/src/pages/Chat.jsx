@@ -2,26 +2,25 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { conversations as convApi } from '../api';
+import useFetch from '../hooks/useFetch';
 import Avatar from '../components/Avatar';
+import Loading from '../components/Loading';
+import ErrorState from '../components/ErrorState';
 import { IconSend, IconChat } from '../components/Icons';
 
 export default function Chat() {
   const { id } = useParams();
   const { user } = useAuth();
+  const { data, error, loading, retry } = useFetch(() => convApi.getMessages(id), [id]);
   const [messages, setMessages] = useState([]);
   const [content, setContent] = useState('');
-  const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const bottomRef = useRef(null);
 
+  // History seeds the thread; sends append to it locally from there.
   useEffect(() => {
-    if (!id) return;
-    convApi
-      .getMessages(id)
-      .then((res) => setMessages(res.data.messages || []))
-      .catch(() => setMessages([]))
-      .finally(() => setLoading(false));
-  }, [id]);
+    if (data) setMessages(data.messages || []);
+  }, [data]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -42,11 +41,12 @@ export default function Chat() {
     }
   }
 
-  if (loading)
+  if (loading) return <Loading text="Opening chat…" />;
+
+  if (error)
     return (
-      <div className="loading-page">
-        <div className="spinner" />
-        <p>Opening chat…</p>
+      <div className="page">
+        <ErrorState text="We couldn't open this conversation." onRetry={retry} />
       </div>
     );
 

@@ -86,6 +86,15 @@ export function IconPin(props) {
   );
 }
 
+export function IconAlert(props) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7.5v5M12 16.2h.01" />
+    </svg>
+  );
+}
+
 export function IconShield(props) {
   return (
     <svg {...base} {...props}>

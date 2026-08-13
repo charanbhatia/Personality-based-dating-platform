@@ -9,6 +9,7 @@ import {
 } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import BackgroundFX from './components/BackgroundFX';
+import Loading from './components/Loading';
 import {
   IconHeart,
   IconUser,
@@ -47,10 +48,7 @@ function ProtectedRoute({ children }) {
   if (loading)
     return (
       <div className="app-shell">
-        <div className="loading-page">
-          <div className="spinner" />
-          <p>Getting things ready…</p>
-        </div>
+        <Loading text="Getting things ready…" />
       </div>
     );
   if (!user) return <Navigate to="/login" replace />;

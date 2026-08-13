@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { conversations as convApi } from '../api';
+import Loading from '../components/Loading';
 
 export default function StartConversation() {
   const { userId } = useParams();
@@ -14,10 +15,5 @@ export default function StartConversation() {
       .catch(() => navigate('/conversations'));
   }, [userId, navigate]);
 
-  return (
-    <div className="loading-page">
-      <div className="spinner" />
-      <p>Starting your conversation…</p>
-    </div>
-  );
+  return <Loading text="Starting your conversation…" />;
 }

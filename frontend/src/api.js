@@ -14,10 +14,16 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// A 401 from the login/register endpoints means "bad credentials", not "session
+// expired" — redirecting there would reload the page and wipe the error the form
+// just set, leaving the user staring at a blank form.
+const isAuthAttempt = (url = '') =>
+  url.endsWith('/auth/login') || url.endsWith('/auth/register');
+
 api.interceptors.response.use(
   (r) => r,
   (err) => {
-    if (err.response?.status === 401) {
+    if (err.response?.status === 401 && !isAuthAttempt(err.config?.url)) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       window.location.href = '/login';

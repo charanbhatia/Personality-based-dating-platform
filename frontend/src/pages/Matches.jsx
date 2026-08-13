@@ -1,30 +1,18 @@
-import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { matches as matchesApi } from '../api';
+import useFetch from '../hooks/useFetch';
 import TiltCard from '../components/TiltCard';
 import CompatibilityRing from '../components/CompatibilityRing';
 import Avatar from '../components/Avatar';
+import Loading from '../components/Loading';
+import ErrorState from '../components/ErrorState';
 import { IconHeart, IconChat, IconPin, IconUser, IconSpark } from '../components/Icons';
 
 export default function Matches() {
-  const [list, setList] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { data, error, loading, retry } = useFetch(() => matchesApi.list());
+  const list = data?.matches || [];
 
-  useEffect(() => {
-    matchesApi
-      .list()
-      .then((res) => setList(res.data.matches || []))
-      .catch(() => setList([]))
-      .finally(() => setLoading(false));
-  }, []);
-
-  if (loading)
-    return (
-      <div className="loading-page">
-        <div className="spinner" />
-        <p>Finding your people…</p>
-      </div>
-    );
+  if (loading) return <Loading text="Finding your people…" />;
 
   return (
     <div className="page">
@@ -34,7 +22,9 @@ export default function Matches() {
       <h1>Your matches</h1>
       <p>People whose personality and preferences align with yours.</p>
 
-      {list.length === 0 ? (
+      {error ? (
+        <ErrorState text="We couldn't load your matches right now." onRetry={retry} />
+      ) : list.length === 0 ? (
         <div className="empty-state">
           <span className="empty-icon"><IconHeart /></span>
           <h3>No matches yet</h3>
