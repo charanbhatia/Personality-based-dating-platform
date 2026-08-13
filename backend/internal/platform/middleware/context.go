@@ -43,6 +43,14 @@ func SetUserID(ctx context.Context, userID string) {
 	}
 }
 
+// UserIDFrom returns the authenticated user recorded by the auth middleware.
+func UserIDFrom(ctx context.Context) string {
+	if info := infoFrom(ctx); info != nil {
+		return info.UserID
+	}
+	return ""
+}
+
 // ClientIP resolves the caller address, honouring X-Forwarded-For when present.
 func ClientIP(r *http.Request) string {
 	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {

@@ -22,6 +22,11 @@ type Config struct {
 	RateLimitWindow  time.Duration
 	RateLimitGlobal  int
 	RateLimitAuth    int
+
+	MessageSendLimit  int
+	MessageSendWindow time.Duration
+	MaxMessageLength  int
+	MatchGateEnabled  bool
 }
 
 func Load() *Config {
@@ -40,6 +45,11 @@ func Load() *Config {
 		RateLimitWindow:  time.Duration(getInt("RATE_LIMIT_WINDOW_SECONDS", 60)) * time.Second,
 		RateLimitGlobal:  getInt("RATE_LIMIT_GLOBAL", 600),
 		RateLimitAuth:    getInt("RATE_LIMIT_AUTH", 20),
+
+		MessageSendLimit:  getInt("RATE_LIMIT_MESSAGE_SEND", 5),
+		MessageSendWindow: time.Duration(getInt("RATE_LIMIT_MESSAGE_WINDOW_SECONDS", 1)) * time.Second,
+		MaxMessageLength:  getInt("MAX_MESSAGE_LENGTH", 4000),
+		MatchGateEnabled:  getBool("MATCH_GATE_ENABLED", true),
 	}
 }
 

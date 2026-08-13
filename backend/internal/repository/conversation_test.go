@@ -2,57 +2,21 @@ package repository
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"testing"
 
+	"github.com/bits-assignment/dating-platform/backend/internal/platform/testdb"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// testPool connects to TEST_DATABASE_URL and applies the schema. Tests that
-// need a database are skipped when the variable is unset so the default
-// `go test ./...` run stays dependency-free.
 func testPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-
-	url := os.Getenv("TEST_DATABASE_URL")
-	if url == "" {
-		t.Skip("TEST_DATABASE_URL not set; skipping database integration test")
-	}
-
-	ctx := context.Background()
-	pool, err := pgxpool.New(ctx, url)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	if err := pool.Ping(ctx); err != nil {
-		t.Fatalf("ping: %v", err)
-	}
-	t.Cleanup(pool.Close)
-
-	schema, err := os.ReadFile(filepath.Join("..", "..", "migrations", "001_init.sql"))
-	if err != nil {
-		t.Fatalf("read schema: %v", err)
-	}
-	if _, err := pool.Exec(ctx, string(schema)); err != nil {
-		t.Fatalf("apply schema: %v", err)
-	}
-	if _, err := pool.Exec(ctx, "TRUNCATE users RESTART IDENTITY CASCADE"); err != nil {
-		t.Fatalf("truncate: %v", err)
-	}
-	return pool
+	return testdb.New(t)
 }
 
 func createUser(t *testing.T, pool *pgxpool.Pool, email string) uuid.UUID {
 	t.Helper()
-	id := uuid.New()
-	_, err := pool.Exec(context.Background(),
-		`INSERT INTO users (id, email, password_hash, name) VALUES ($1, $2, 'x', $2)`, id, email)
-	if err != nil {
-		t.Fatalf("create user %s: %v", email, err)
-	}
-	return id
+	return testdb.CreateUser(t, pool, email, email)
 }
 
 // The list query filters on a single placeholder used twice. Passing the user

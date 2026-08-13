@@ -87,6 +87,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3000}
+      MATCH_GATE_ENABLED: ${MATCH_GATE_ENABLED:-true}
     ports:
       - "${API_HOST_PORT:-8080}:8080"
     healthcheck:
