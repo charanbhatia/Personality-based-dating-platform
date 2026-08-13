@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	goredis "github.com/redis/go-redis/v9"
 )
 
@@ -32,19 +33,25 @@ func testQueue(t *testing.T) (*Queue, *goredis.Client) {
 	if err := client.Ping(ctx).Err(); err != nil {
 		t.Fatalf("ping redis: %v", err)
 	}
-	if err := client.FlushDB(ctx).Err(); err != nil {
-		t.Fatalf("flush redis: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = client.FlushDB(context.Background())
-		_ = client.Close()
-	})
+	t.Cleanup(func() { _ = client.Close() })
 
 	return New(client, slog.New(slog.NewTextHandler(io.Discard, nil)), 1000), client
 }
 
 type payload struct {
 	Value string `json:"value"`
+}
+
+// stream returns a name unique to this test so packages sharing a Redis
+// instance cannot disturb each other.
+func stream(t *testing.T, client *goredis.Client) string {
+	t.Helper()
+
+	name := "queue:test:" + uuid.NewString()
+	t.Cleanup(func() {
+		_ = client.Del(context.Background(), name, name+":dead").Err()
+	})
+	return name
 }
 
 // consume runs a consumer until stop fires, so tests do not leak goroutines.
@@ -85,13 +92,14 @@ func waitFor(t *testing.T, what string, cond func() bool) {
 }
 
 func TestPublishedEventsReachTheHandler(t *testing.T) {
-	q, _ := testQueue(t)
+	q, client := testQueue(t)
+	st := stream(t, client)
 
 	var mu sync.Mutex
 	var got []string
 
 	stop := consume(t, q, ConsumerConfig{
-		Stream:       "queue:test",
+		Stream:       st,
 		Group:        "g1",
 		Consumer:     "c1",
 		Concurrency:  2,
@@ -110,7 +118,7 @@ func TestPublishedEventsReachTheHandler(t *testing.T) {
 
 	ctx := context.Background()
 	for i := 0; i < 5; i++ {
-		if _, err := q.Publish(ctx, "queue:test", "test.event", payload{Value: fmt.Sprintf("v%d", i)}); err != nil {
+		if _, err := q.Publish(ctx, st, "test.event", payload{Value: fmt.Sprintf("v%d", i)}); err != nil {
 			t.Fatalf("publish: %v", err)
 		}
 	}
@@ -124,12 +132,13 @@ func TestPublishedEventsReachTheHandler(t *testing.T) {
 
 func TestFailedEventsAreRetriedThenDeadLettered(t *testing.T) {
 	q, client := testQueue(t)
+	st := stream(t, client)
 
 	var mu sync.Mutex
 	attempts := 0
 
 	stop := consume(t, q, ConsumerConfig{
-		Stream:       "queue:retry",
+		Stream:       st,
 		Group:        "g1",
 		Consumer:     "c1",
 		Concurrency:  1,
@@ -145,12 +154,12 @@ func TestFailedEventsAreRetriedThenDeadLettered(t *testing.T) {
 	defer stop()
 
 	ctx := context.Background()
-	if _, err := q.Publish(ctx, "queue:retry", "test.event", payload{Value: "boom"}); err != nil {
+	if _, err := q.Publish(ctx, st, "test.event", payload{Value: "boom"}); err != nil {
 		t.Fatalf("publish: %v", err)
 	}
 
 	waitFor(t, "the event to be dead lettered", func() bool {
-		n, err := client.XLen(ctx, "queue:retry:dead").Result()
+		n, err := client.XLen(ctx, st+":dead").Result()
 		return err == nil && n == 1
 	})
 
@@ -162,7 +171,7 @@ func TestFailedEventsAreRetriedThenDeadLettered(t *testing.T) {
 	}
 
 	// A dead lettered event must be acknowledged so it stops being redelivered.
-	pending, err := client.XPending(ctx, "queue:retry", "g1").Result()
+	pending, err := client.XPending(ctx, st, "g1").Result()
 	if err != nil {
 		t.Fatalf("xpending: %v", err)
 	}
@@ -173,12 +182,13 @@ func TestFailedEventsAreRetriedThenDeadLettered(t *testing.T) {
 
 func TestSucceedingRetryIsNotDeadLettered(t *testing.T) {
 	q, client := testQueue(t)
+	st := stream(t, client)
 
 	var mu sync.Mutex
 	attempts := 0
 
 	stop := consume(t, q, ConsumerConfig{
-		Stream:       "queue:flaky",
+		Stream:       st,
 		Group:        "g1",
 		Consumer:     "c1",
 		Concurrency:  1,
@@ -198,16 +208,16 @@ func TestSucceedingRetryIsNotDeadLettered(t *testing.T) {
 	defer stop()
 
 	ctx := context.Background()
-	if _, err := q.Publish(ctx, "queue:flaky", "test.event", payload{Value: "retry me"}); err != nil {
+	if _, err := q.Publish(ctx, st, "test.event", payload{Value: "retry me"}); err != nil {
 		t.Fatalf("publish: %v", err)
 	}
 
 	waitFor(t, "the retry to succeed", func() bool {
-		pending, err := client.XPending(ctx, "queue:flaky", "g1").Result()
+		pending, err := client.XPending(ctx, st, "g1").Result()
 		return err == nil && pending.Count == 0
 	})
 
-	n, err := client.XLen(ctx, "queue:flaky:dead").Result()
+	n, err := client.XLen(ctx, st+":dead").Result()
 	if err != nil {
 		t.Fatalf("dead letter length: %v", err)
 	}
@@ -218,6 +228,7 @@ func TestSucceedingRetryIsNotDeadLettered(t *testing.T) {
 
 func TestRedeliveryDoesNotRunTheHandlerTwice(t *testing.T) {
 	q, client := testQueue(t)
+	st := stream(t, client)
 	ctx := context.Background()
 
 	var mu sync.Mutex
@@ -230,7 +241,7 @@ func TestRedeliveryDoesNotRunTheHandlerTwice(t *testing.T) {
 	}
 
 	cfg := ConsumerConfig{
-		Stream:       "queue:dedupe",
+		Stream:       st,
 		Group:        "g1",
 		Consumer:     "c1",
 		Concurrency:  1,
@@ -238,7 +249,7 @@ func TestRedeliveryDoesNotRunTheHandlerTwice(t *testing.T) {
 	}
 
 	stop := consume(t, q, cfg, handler)
-	if _, err := q.Publish(ctx, "queue:dedupe", "test.event", payload{Value: "once"}); err != nil {
+	if _, err := q.Publish(ctx, st, "test.event", payload{Value: "once"}); err != nil {
 		t.Fatalf("publish: %v", err)
 	}
 	waitFor(t, "the first delivery", func() bool {
@@ -249,12 +260,12 @@ func TestRedeliveryDoesNotRunTheHandlerTwice(t *testing.T) {
 	stop()
 
 	// Replay the same event_id as if the stream had redelivered it.
-	entries, err := client.XRange(ctx, "queue:dedupe", "-", "+").Result()
+	entries, err := client.XRange(ctx, st, "-", "+").Result()
 	if err != nil || len(entries) != 1 {
 		t.Fatalf("read stream: %v (%d entries)", err, len(entries))
 	}
 	if err := client.XAdd(ctx, &goredis.XAddArgs{
-		Stream: "queue:dedupe",
+		Stream: st,
 		Values: entries[0].Values,
 	}).Err(); err != nil {
 		t.Fatalf("replay: %v", err)
@@ -264,7 +275,7 @@ func TestRedeliveryDoesNotRunTheHandlerTwice(t *testing.T) {
 	defer stop2()
 
 	waitFor(t, "the replay to be acknowledged", func() bool {
-		pending, err := client.XPending(ctx, "queue:dedupe", "g1").Result()
+		pending, err := client.XPending(ctx, st, "g1").Result()
 		return err == nil && pending.Count == 0
 	})
 

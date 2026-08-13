@@ -95,6 +95,7 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3000}
       MATCH_GATE_ENABLED: ${MATCH_GATE_ENABLED:-true}
+      WS_ALLOWED_ORIGINS: ${WS_ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:3000}
       S3_ENDPOINT: http://minio:9000
       S3_PUBLIC_BASE_URL: ${S3_PUBLIC_BASE_URL:-http://localhost:9000}
       S3_BUCKET: ${S3_BUCKET:-dating-media}

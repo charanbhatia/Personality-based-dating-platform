@@ -2,6 +2,7 @@ package messaging
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"strings"
@@ -33,16 +34,37 @@ type Publisher interface {
 	Publish(ctx context.Context, stream, eventType string, payload any) (string, error)
 }
 
+// Broadcaster pushes a stored message to connected clients. It is satisfied by
+// the realtime gateway; a nil broadcaster simply skips live delivery.
+type Broadcaster interface {
+	PublishMessage(ctx context.Context, conversationID uuid.UUID, message json.RawMessage) error
+}
+
 type Service struct {
-	store *Store
-	gate  *MatchGate
-	cfg   Config
-	pub   Publisher
-	log   *slog.Logger
+	store       *Store
+	gate        *MatchGate
+	cfg         Config
+	pub         Publisher
+	broadcaster Broadcaster
+	log         *slog.Logger
 }
 
 func NewService(store *Store, gate *MatchGate, cfg Config, pub Publisher, log *slog.Logger) *Service {
 	return &Service{store: store, gate: gate, cfg: cfg, pub: pub, log: log}
+}
+
+// WithBroadcaster attaches live delivery. It is set after construction because
+// the realtime gateway needs the service itself.
+func (s *Service) WithBroadcaster(b Broadcaster) *Service {
+	s.broadcaster = b
+	return s
+}
+
+// CanAccess reports whether a user may read or write in a conversation. The
+// realtime gateway uses it to authorise subscriptions.
+func (s *Service) CanAccess(ctx context.Context, userID, convID uuid.UUID) error {
+	_, err := s.authorise(ctx, convID, userID)
+	return err
 }
 
 func (s *Service) MatchGateEnabled() bool { return s.cfg.MatchGateEnabled }
@@ -160,7 +182,25 @@ func (s *Service) Send(ctx context.Context, userID, convID uuid.UUID, content, c
 	}
 
 	s.publishMessageCreated(ctx, conv, msg)
+	s.broadcast(ctx, conv.ID, msg)
 	return msg, created, nil
+}
+
+// broadcast delivers the message to live clients. Like event publishing it is
+// best effort: the message is already stored and readable over REST.
+func (s *Service) broadcast(ctx context.Context, convID uuid.UUID, msg Message) {
+	if s.broadcaster == nil {
+		return
+	}
+
+	encoded, err := json.Marshal(msg)
+	if err != nil {
+		s.log.Warn("encoding message for broadcast failed", "message_id", msg.ID, "error", err)
+		return
+	}
+	if err := s.broadcaster.PublishMessage(ctx, convID, encoded); err != nil {
+		s.log.Warn("broadcasting message failed", "conversation_id", convID, "error", err)
+	}
 }
 
 // publishMessageCreated is best effort: a delivered message must not fail

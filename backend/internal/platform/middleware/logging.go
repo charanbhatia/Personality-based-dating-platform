@@ -1,7 +1,10 @@
 package middleware
 
 import (
+	"bufio"
+	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"time"
 )
@@ -23,9 +26,25 @@ func (s *statusRecorder) Write(b []byte) (int, error) {
 	return n, err
 }
 
-// Unwrap lets http.ResponseController reach the underlying writer, which the
-// WebSocket upgrade path depends on.
+// Unwrap lets http.ResponseController reach the underlying writer.
 func (s *statusRecorder) Unwrap() http.ResponseWriter { return s.ResponseWriter }
+
+// Hijack must be forwarded explicitly: the WebSocket upgrader type-asserts the
+// writer to http.Hijacker rather than unwrapping it, so a plain wrapper would
+// break every upgrade.
+func (s *statusRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	hijacker, ok := s.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, fmt.Errorf("response writer does not support hijacking")
+	}
+	return hijacker.Hijack()
+}
+
+func (s *statusRecorder) Flush() {
+	if flusher, ok := s.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
 
 func Logger(log *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
