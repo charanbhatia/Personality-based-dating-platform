@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bits-assignment/dating-platform/backend/internal/platform/metrics"
 	"github.com/google/uuid"
 	goredis "github.com/redis/go-redis/v9"
 )
@@ -219,6 +220,7 @@ func (q *Queue) process(ctx context.Context, cfg ConsumerConfig, handler Handler
 	dedupeKey := fmt.Sprintf("queue:done:%s:%s", cfg.Stream, e.ID)
 	done, err := q.client.Exists(ctx, dedupeKey).Result()
 	if err == nil && done > 0 {
+		metrics.ObserveQueueEvent(cfg.Stream, metrics.OutcomeSkipped)
 		q.ack(ctx, cfg, e)
 		return
 	}
@@ -229,11 +231,17 @@ func (q *Queue) process(ctx context.Context, cfg ConsumerConfig, handler Handler
 	}
 	e.Attempt = int(attempt)
 
-	if err := handler(ctx, e); err != nil {
+	start := time.Now()
+	err = handler(ctx, e)
+	metrics.ObserveQueueHandler(cfg.Stream, time.Since(start))
+
+	if err != nil {
+		metrics.ObserveQueueEvent(cfg.Stream, metrics.OutcomeFailed)
 		q.log.Error("queue handler failed",
 			"stream", cfg.Stream, "event_id", e.ID, "type", e.Type, "attempt", e.Attempt, "error", err)
 
 		if e.Attempt >= cfg.MaxAttempts {
+			metrics.ObserveQueueEvent(cfg.Stream, metrics.OutcomeDeadLetter)
 			q.deadLetter(ctx, cfg, e, err)
 			q.ack(ctx, cfg, e)
 		}
@@ -241,6 +249,7 @@ func (q *Queue) process(ctx context.Context, cfg ConsumerConfig, handler Handler
 		return
 	}
 
+	metrics.ObserveQueueEvent(cfg.Stream, metrics.OutcomeProcessed)
 	q.client.Set(ctx, dedupeKey, "1", cfg.DedupeTTL)
 	q.ack(ctx, cfg, e)
 }

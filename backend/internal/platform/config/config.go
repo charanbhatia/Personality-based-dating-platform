@@ -34,6 +34,7 @@ type Config struct {
 	QueueBlockTimeout time.Duration
 	WorkerConcurrency int
 	WorkerName        string
+	WorkerMetricsPort string
 
 	S3Endpoint      string
 	S3Region        string
@@ -54,6 +55,9 @@ type Config struct {
 	WSPingInterval    time.Duration
 	WSPongTimeout     time.Duration
 	WSWriteTimeout    time.Duration
+
+	MetricsEnabled        bool
+	MetricsSampleInterval time.Duration
 
 	AppBaseURL   string
 	EmailMode    string
@@ -92,6 +96,7 @@ func Load() *Config {
 		QueueBlockTimeout: time.Duration(getInt("QUEUE_BLOCK_SECONDS", 5)) * time.Second,
 		WorkerConcurrency: getInt("WORKER_CONCURRENCY", 4),
 		WorkerName:        getEnv("WORKER_NAME", defaultWorkerName()),
+		WorkerMetricsPort: getEnv("WORKER_METRICS_PORT", "9091"),
 
 		S3Endpoint:      getEnv("S3_ENDPOINT", ""),
 		S3Region:        getEnv("S3_REGION", "us-east-1"),
@@ -112,6 +117,9 @@ func Load() *Config {
 		WSPingInterval:    time.Duration(getInt("WS_PING_INTERVAL_SECONDS", 30)) * time.Second,
 		WSPongTimeout:     time.Duration(getInt("WS_PONG_TIMEOUT_SECONDS", 70)) * time.Second,
 		WSWriteTimeout:    time.Duration(getInt("WS_WRITE_TIMEOUT_SECONDS", 10)) * time.Second,
+
+		MetricsEnabled:        getBool("METRICS_ENABLED", true),
+		MetricsSampleInterval: time.Duration(getInt("METRICS_SAMPLE_INTERVAL_SECONDS", 15)) * time.Second,
 
 		AppBaseURL:   getEnv("APP_BASE_URL", "http://localhost:5173"),
 		EmailMode:    getEnv("EMAIL_MODE", "log"),

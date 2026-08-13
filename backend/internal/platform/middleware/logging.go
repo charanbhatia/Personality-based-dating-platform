@@ -7,6 +7,8 @@ import (
 	"net"
 	"net/http"
 	"time"
+
+	"github.com/bits-assignment/dating-platform/backend/internal/platform/metrics"
 )
 
 type statusRecorder struct {
@@ -54,6 +56,12 @@ func Logger(log *slog.Logger) func(http.Handler) http.Handler {
 
 			next.ServeHTTP(rec, r)
 
+			route := ""
+			if info := infoFrom(r.Context()); info != nil {
+				route = info.Route
+			}
+			metrics.ObserveHTTP(route, r.Method, rec.status, time.Since(start))
+
 			attrs := []any{
 				"method", r.Method,
 				"path", r.URL.Path,
@@ -64,6 +72,9 @@ func Logger(log *slog.Logger) func(http.Handler) http.Handler {
 			}
 			if info := infoFrom(r.Context()); info != nil {
 				attrs = append(attrs, "request_id", info.RequestID)
+				if info.TraceID != "" {
+					attrs = append(attrs, "trace_id", info.TraceID)
+				}
 				if info.UserID != "" {
 					attrs = append(attrs, "user_id", info.UserID)
 				}

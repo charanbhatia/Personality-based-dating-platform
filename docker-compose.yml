@@ -136,6 +136,9 @@ services:
       EMAIL_MODE: ${EMAIL_MODE:-smtp}
       SMTP_HOST: mailhog
       SMTP_PORT: "1025"
+      WORKER_METRICS_PORT: "9091"
+    ports:
+      - "${WORKER_METRICS_HOST_PORT:-9091}:9091"
     restart: unless-stopped
 
 volumes:
