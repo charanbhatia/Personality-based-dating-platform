@@ -3,9 +3,11 @@ package messaging
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"strings"
 
 	"github.com/bits-assignment/dating-platform/backend/internal/platform/cursor"
+	"github.com/bits-assignment/dating-platform/backend/internal/platform/events"
 	"github.com/google/uuid"
 )
 
@@ -25,14 +27,22 @@ type Config struct {
 	MatchGateEnabled bool
 }
 
+// Publisher emits domain events. A nil publisher disables event emission, which
+// keeps the API usable when Redis is not configured.
+type Publisher interface {
+	Publish(ctx context.Context, stream, eventType string, payload any) (string, error)
+}
+
 type Service struct {
 	store *Store
 	gate  *MatchGate
 	cfg   Config
+	pub   Publisher
+	log   *slog.Logger
 }
 
-func NewService(store *Store, gate *MatchGate, cfg Config) *Service {
-	return &Service{store: store, gate: gate, cfg: cfg}
+func NewService(store *Store, gate *MatchGate, cfg Config, pub Publisher, log *slog.Logger) *Service {
+	return &Service{store: store, gate: gate, cfg: cfg, pub: pub, log: log}
 }
 
 func (s *Service) MatchGateEnabled() bool { return s.cfg.MatchGateEnabled }
@@ -107,7 +117,7 @@ func (s *Service) ListConversations(ctx context.Context, userID uuid.UUID, after
 }
 
 func (s *Service) ListMessages(ctx context.Context, userID, convID uuid.UUID, before *cursor.Keyset, limit int) ([]Message, *string, error) {
-	if err := s.assertParticipant(ctx, convID, userID); err != nil {
+	if _, err := s.authorise(ctx, convID, userID); err != nil {
 		return nil, nil, err
 	}
 
@@ -138,36 +148,71 @@ func (s *Service) Send(ctx context.Context, userID, convID uuid.UUID, content, c
 	if len([]rune(content)) > s.cfg.MaxMessageLength {
 		return Message{}, false, ErrContentTooLong
 	}
-	if err := s.assertParticipant(ctx, convID, userID); err != nil {
+
+	conv, err := s.authorise(ctx, convID, userID)
+	if err != nil {
 		return Message{}, false, err
 	}
-	return s.store.insertMessage(ctx, convID, userID, content, clientMsgID)
+
+	msg, created, err := s.store.insertMessage(ctx, convID, userID, content, clientMsgID)
+	if err != nil || !created {
+		return msg, created, err
+	}
+
+	s.publishMessageCreated(ctx, conv, msg)
+	return msg, created, nil
+}
+
+// publishMessageCreated is best effort: a delivered message must not fail
+// because the queue is unavailable.
+func (s *Service) publishMessageCreated(ctx context.Context, conv conversationRow, msg Message) {
+	if s.pub == nil {
+		return
+	}
+
+	recipient := conv.User1ID
+	if recipient == msg.SenderID {
+		recipient = conv.User2ID
+	}
+
+	_, err := s.pub.Publish(ctx, events.StreamNotifications, events.TypeMessageCreated, events.MessageCreated{
+		ConversationID: conv.ID,
+		MessageID:      msg.ID,
+		SenderID:       msg.SenderID,
+		RecipientID:    recipient,
+		Preview:        preview(msg.Content),
+	})
+	if err != nil && s.log != nil {
+		s.log.Warn("publishing message.created failed",
+			"conversation_id", conv.ID, "message_id", msg.ID, "error", err)
+	}
 }
 
 func (s *Service) MarkRead(ctx context.Context, userID, convID uuid.UUID) error {
-	if err := s.assertParticipant(ctx, convID, userID); err != nil {
+	if _, err := s.authorise(ctx, convID, userID); err != nil {
 		return err
 	}
 	return s.store.markRead(ctx, convID, userID)
 }
 
-// assertParticipant also blocks access once either user has blocked the other,
-// so an existing thread goes quiet instead of staying open.
-func (s *Service) assertParticipant(ctx context.Context, convID, userID uuid.UUID) error {
+// authorise checks participation and blocks, returning the conversation so
+// callers do not have to load it again. A block closes an existing thread
+// rather than only preventing new ones.
+func (s *Service) authorise(ctx context.Context, convID, userID uuid.UUID) (conversationRow, error) {
 	row, err := s.store.getConversation(ctx, convID)
 	if err != nil {
-		return err
+		return conversationRow{}, err
 	}
 	if !row.hasParticipant(userID) {
-		return ErrForbidden
+		return conversationRow{}, ErrForbidden
 	}
 
 	blocked, err := s.gate.IsBlocked(ctx, row.User1ID, row.User2ID)
 	if err != nil {
-		return err
+		return conversationRow{}, err
 	}
 	if blocked {
-		return ErrBlocked
+		return conversationRow{}, ErrBlocked
 	}
-	return nil
+	return row, nil
 }

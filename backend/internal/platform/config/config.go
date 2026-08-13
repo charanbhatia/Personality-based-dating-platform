@@ -27,6 +27,13 @@ type Config struct {
 	MessageSendWindow time.Duration
 	MaxMessageLength  int
 	MatchGateEnabled  bool
+
+	QueueMaxLen       int64
+	QueueMaxAttempts  int
+	QueueRetryDelay   time.Duration
+	QueueBlockTimeout time.Duration
+	WorkerConcurrency int
+	WorkerName        string
 }
 
 func Load() *Config {
@@ -50,7 +57,24 @@ func Load() *Config {
 		MessageSendWindow: time.Duration(getInt("RATE_LIMIT_MESSAGE_WINDOW_SECONDS", 1)) * time.Second,
 		MaxMessageLength:  getInt("MAX_MESSAGE_LENGTH", 4000),
 		MatchGateEnabled:  getBool("MATCH_GATE_ENABLED", true),
+
+		QueueMaxLen:       int64(getInt("QUEUE_MAX_LEN", 10000)),
+		QueueMaxAttempts:  getInt("QUEUE_MAX_ATTEMPTS", 5),
+		QueueRetryDelay:   time.Duration(getInt("QUEUE_RETRY_DELAY_SECONDS", 30)) * time.Second,
+		QueueBlockTimeout: time.Duration(getInt("QUEUE_BLOCK_SECONDS", 5)) * time.Second,
+		WorkerConcurrency: getInt("WORKER_CONCURRENCY", 4),
+		WorkerName:        getEnv("WORKER_NAME", defaultWorkerName()),
 	}
+}
+
+// defaultWorkerName keeps consumer names distinct per process so Redis can tell
+// replicas apart when reclaiming pending events.
+func defaultWorkerName() string {
+	host, err := os.Hostname()
+	if err != nil || host == "" {
+		return "worker"
+	}
+	return host
 }
 
 // RedisEnabled reports whether Redis-backed features (rate limiting, pub/sub,

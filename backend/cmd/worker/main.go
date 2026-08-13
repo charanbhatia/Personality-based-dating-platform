@@ -1,0 +1,89 @@
+package main
+
+import (
+	"context"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
+
+	"github.com/bits-assignment/dating-platform/backend/internal/db"
+	"github.com/bits-assignment/dating-platform/backend/internal/platform/config"
+	"github.com/bits-assignment/dating-platform/backend/internal/platform/logging"
+	"github.com/bits-assignment/dating-platform/backend/internal/platform/queue"
+	platformredis "github.com/bits-assignment/dating-platform/backend/internal/platform/redis"
+	"github.com/joho/godotenv"
+)
+
+// consumer binds a handler to a stream. Domain packages register theirs in
+// registerConsumers as they land.
+type consumer struct {
+	stream  string
+	group   string
+	handler queue.Handler
+}
+
+func main() {
+	_ = godotenv.Load()
+	cfg := config.Load()
+	log := logging.New(cfg.LogLevel)
+
+	if !cfg.RedisEnabled() {
+		log.Error("REDIS_URL is required to run the worker")
+		os.Exit(1)
+	}
+
+	if err := db.Init(cfg.DatabaseURL); err != nil {
+		log.Error("database init failed", "error", err)
+		os.Exit(1)
+	}
+	defer db.Close()
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	redisClient, err := platformredis.New(ctx, cfg.RedisURL)
+	if err != nil {
+		log.Error("redis init failed", "error", err)
+		os.Exit(1)
+	}
+	defer redisClient.Close()
+
+	q := queue.New(redisClient, log, cfg.QueueMaxLen)
+	consumers := registerConsumers()
+	if len(consumers) == 0 {
+		log.Warn("worker started with no consumers registered")
+	}
+
+	var wg sync.WaitGroup
+	for _, c := range consumers {
+		wg.Add(1)
+		go func(c consumer) {
+			defer wg.Done()
+			log.Info("consuming", "stream", c.stream, "group", c.group, "consumer", cfg.WorkerName)
+
+			err := q.Consume(ctx, queue.ConsumerConfig{
+				Stream:       c.stream,
+				Group:        c.group,
+				Consumer:     cfg.WorkerName,
+				Concurrency:  cfg.WorkerConcurrency,
+				MaxAttempts:  cfg.QueueMaxAttempts,
+				RetryDelay:   cfg.QueueRetryDelay,
+				BlockTimeout: cfg.QueueBlockTimeout,
+			}, c.handler)
+			if err != nil && ctx.Err() == nil {
+				log.Error("consumer stopped", "stream", c.stream, "error", err)
+			}
+		}(c)
+	}
+
+	log.Info("worker started", "name", cfg.WorkerName, "concurrency", cfg.WorkerConcurrency)
+	<-ctx.Done()
+	log.Info("worker shutting down")
+	wg.Wait()
+	log.Info("worker stopped")
+}
+
+func registerConsumers() []consumer {
+	return nil
+}
