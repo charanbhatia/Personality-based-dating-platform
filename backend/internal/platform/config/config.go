@@ -48,6 +48,14 @@ type Config struct {
 	MediaAllowedTypes []string
 	MediaDailyLimit   int
 	ThumbnailMaxEdge  int
+
+	AppBaseURL   string
+	EmailMode    string
+	EmailFrom    string
+	SMTPHost     string
+	SMTPPort     int
+	SMTPUsername string
+	SMTPPassword string
 }
 
 func Load() *Config {
@@ -92,6 +100,14 @@ func Load() *Config {
 		MediaAllowedTypes: getCSV("MEDIA_ALLOWED_TYPES", "image/jpeg,image/png,image/webp"),
 		MediaDailyLimit:   getInt("MEDIA_DAILY_UPLOAD_LIMIT", 50),
 		ThumbnailMaxEdge:  getInt("THUMBNAIL_MAX_EDGE", 512),
+
+		AppBaseURL:   getEnv("APP_BASE_URL", "http://localhost:5173"),
+		EmailMode:    getEnv("EMAIL_MODE", "log"),
+		EmailFrom:    getEnv("EMAIL_FROM", "no-reply@kindred.local"),
+		SMTPHost:     getEnv("SMTP_HOST", ""),
+		SMTPPort:     getInt("SMTP_PORT", 1025),
+		SMTPUsername: getEnv("SMTP_USERNAME", ""),
+		SMTPPassword: getEnv("SMTP_PASSWORD", ""),
 	}
 }
 

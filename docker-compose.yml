@@ -70,6 +70,12 @@ services:
         mc mb --ignore-existing "local/$$S3_BUCKET"
         mc anonymous set download "local/$$S3_BUCKET/public"
 
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    ports:
+      - "${MAILHOG_SMTP_PORT:-1025}:1025"
+      - "${MAILHOG_UI_PORT:-8025}:8025"
+
   api:
     build:
       context: ./backend
@@ -112,6 +118,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      mailhog:
+        condition: service_started
     environment:
       ENV: ${ENV:-development}
       DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-dating_platform}?sslmode=disable
@@ -123,6 +131,10 @@ services:
       S3_BUCKET: ${S3_BUCKET:-dating-media}
       S3_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}
       S3_SECRET_KEY: ${S3_SECRET_KEY:-minioadmin}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:5173}
+      EMAIL_MODE: ${EMAIL_MODE:-smtp}
+      SMTP_HOST: mailhog
+      SMTP_PORT: "1025"
     restart: unless-stopped
 
 volumes:
