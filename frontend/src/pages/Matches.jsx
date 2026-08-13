@@ -43,7 +43,7 @@ export default function Matches() {
                       <CompatibilityRing value={score} size={64} stroke={6} />
                     </span>
                     {m.photo_url ? (
-                      <img src={m.photo_url} alt={m.name} loading="lazy" />
+                      <img src={m.photo_url} alt={m.name || ''} loading="lazy" />
                     ) : (
                       <div className="match-media-fallback">
                         <Avatar name={m.name} seed={m.user_id} size={96} />

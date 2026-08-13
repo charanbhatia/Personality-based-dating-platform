@@ -2,13 +2,33 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0a0a12" />
     <meta
       name="description"
       content="Kindred — a dating platform that matches you on personality, values and the way you think, not just looks."
     />
+
+    <!-- Link previews. A dating app gets shared in chats, so the unfurl is the
+         first thing most people see of it. On deploy, make the image URLs
+         absolute (https://your-domain/og-cover.png) — several unfurlers refuse
+         to resolve a relative og:image. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Kindred" />
+    <meta property="og:title" content="Kindred · Meet minds, not just faces" />
+    <meta
+      property="og:description"
+      content="Matched on personality, values and the way you think — so every match is someone worth talking to."
+    />
+    <meta property="og:image" content="/og-cover.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Kindred · Meet minds, not just faces" />
+    <meta
+      name="twitter:description"
+      content="Matched on personality, values and the way you think — so every match is someone worth talking to."
+    />
+    <meta name="twitter:image" content="/og-cover.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

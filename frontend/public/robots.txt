@@ -1,0 +1,15 @@
+# Kindred
+#
+# Everything is crawlable. The app routes all serve the same index.html and the
+# auth redirect is client-side, so a crawler sees the shell either way —
+# disallowing them buys no real protection and costs Lighthouse 34 points on
+# those URLs (is-crawlable is 31% of the SEO category).
+#
+# Authorization is enforced server-side on every /api route; robots.txt is a
+# crawling hint, never an access control.
+
+User-agent: *
+Allow: /
+
+# On deploy, point this at the real host:
+# Sitemap: https://your-domain.example/sitemap.xml

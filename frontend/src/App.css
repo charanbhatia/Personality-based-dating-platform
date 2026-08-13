@@ -194,8 +194,8 @@
 .btn-logout {
   display: inline-grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
+  width: 44px;
+  height: 44px;
   background: rgba(255, 77, 125, 0.12);
   color: #ff8aad;
   border: 1px solid rgba(255, 77, 125, 0.25);
@@ -1308,11 +1308,23 @@
   .app-main {
     padding: 1.2rem 1rem 2rem;
   }
+  /* Hidden visually, not from assistive tech: `display: none` here left the
+     nav links with no accessible name at all, since the icon is aria-hidden. */
   .header-nav .nav-item span {
-    display: none;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
   .header-nav .nav-item {
-    padding: 0.5rem;
+    padding: 0.65rem;
+    min-width: 44px;
+    min-height: 44px;
+    justify-content: center;
   }
   .page {
     padding: 1.3rem;

@@ -14,6 +14,7 @@ import BackgroundFX from './components/BackgroundFX';
 import Brand from './components/Brand';
 import Loading from './components/Loading';
 import ErrorBoundary from './components/ErrorBoundary';
+import useRouteMeta from './hooks/useRouteMeta';
 import {
   IconUser,
   IconHeart,
@@ -136,6 +137,7 @@ function Layout() {
 }
 
 function AppRoutes() {
+  useRouteMeta();
   // The boundary sits above this Suspense too: /register is the one lazy route
   // outside Layout, and a failed chunk fetch there would otherwise white-screen
   // the whole app.

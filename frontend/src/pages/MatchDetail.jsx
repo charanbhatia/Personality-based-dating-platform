@@ -39,7 +39,7 @@ export default function MatchDetail() {
       <div className="match-detail">
         <div className="match-detail-media">
           {match.photo_url ? (
-            <img src={match.photo_url} alt={match.name} />
+            <img src={match.photo_url} alt={match.name || ''} />
           ) : (
             <div className="match-media-fallback">
               <Avatar name={match.name} seed={match.user_id} size={140} />
