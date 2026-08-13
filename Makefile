@@ -1,4 +1,4 @@
-.PHONY: up down logs ps reset test test-backend test-frontend lint-frontend build seed
+.PHONY: up down logs ps reset test test-backend test-frontend lint-frontend build seed migrate worker
 
 up:
 	docker compose up -d --build
@@ -31,5 +31,12 @@ test-frontend:
 lint-frontend:
 	cd frontend && npm run lint
 
+migrate:
+	cd backend && go run ./cmd/migrate
+
 seed:
 	cd backend && go run ./cmd/seed
+
+# Person C's queue consumer. Needs REDIS_URL.
+worker:
+	cd backend && go run ./cmd/worker
