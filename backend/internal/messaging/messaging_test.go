@@ -4,10 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"log/slog"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/bits-assignment/dating-platform/backend/internal/platform/cursor"
+	"github.com/bits-assignment/dating-platform/backend/internal/platform/events"
 	"github.com/bits-assignment/dating-platform/backend/internal/platform/testdb"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -22,11 +26,33 @@ const matchesDDL = `CREATE TABLE IF NOT EXISTS matches (
     CHECK (user_a_id < user_b_id)
 )`
 
+// recordingPublisher captures emitted events so tests can assert the contract
+// other domains consume.
+type recordingPublisher struct {
+	mu       sync.Mutex
+	streams  []string
+	types    []string
+	payloads []any
+}
+
+func (p *recordingPublisher) Publish(_ context.Context, stream, eventType string, payload any) (string, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.streams = append(p.streams, stream)
+	p.types = append(p.types, eventType)
+	p.payloads = append(p.payloads, payload)
+	return "event-1", nil
+}
+
 func newService(pool *pgxpool.Pool, gateEnabled bool) *Service {
+	return newServiceWithPublisher(pool, gateEnabled, nil)
+}
+
+func newServiceWithPublisher(pool *pgxpool.Pool, gateEnabled bool, pub Publisher) *Service {
 	return NewService(NewStore(pool), NewMatchGate(pool), Config{
 		MaxMessageLength: 4000,
 		MatchGateEnabled: gateEnabled,
-	})
+	}, pub, slog.New(slog.NewTextHandler(io.Discard, nil)))
 }
 
 // dropMatches removes Person B's table so the gate's "not shipped yet"
@@ -213,7 +239,8 @@ func TestSendIsIdempotentOnClientMsgID(t *testing.T) {
 
 func TestSendValidatesContent(t *testing.T) {
 	pool := testdb.New(t)
-	svc := NewService(NewStore(pool), NewMatchGate(pool), Config{MaxMessageLength: 10})
+	svc := NewService(NewStore(pool), NewMatchGate(pool), Config{MaxMessageLength: 10},
+		nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	ctx := context.Background()
 
 	alice := testdb.CreateUser(t, pool, "alice@example.com", "Alice")
@@ -359,6 +386,50 @@ func TestInboxReportsUnreadCountsAndHidesEmail(t *testing.T) {
 	}
 	if strings.Contains(string(encoded), "@example.com") {
 		t.Errorf("conversation payload leaks an email address: %s", encoded)
+	}
+}
+
+func TestSendPublishesMessageCreatedOnceToTheRecipient(t *testing.T) {
+	pool := testdb.New(t)
+	pub := &recordingPublisher{}
+	svc := newServiceWithPublisher(pool, false, pub)
+	ctx := context.Background()
+
+	alice := testdb.CreateUser(t, pool, "alice@example.com", "Alice")
+	bob := testdb.CreateUser(t, pool, "bob@example.com", "Bob")
+	conv, err := svc.OpenByUser(ctx, alice, bob)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+
+	if _, _, err := svc.Send(ctx, alice, conv.ID, "ping", "dedupe-1"); err != nil {
+		t.Fatalf("send: %v", err)
+	}
+	// A replayed send must not publish a second event.
+	if _, _, err := svc.Send(ctx, alice, conv.ID, "ping", "dedupe-1"); err != nil {
+		t.Fatalf("resend: %v", err)
+	}
+
+	if len(pub.types) != 1 {
+		t.Fatalf("published %d events, want 1: %v", len(pub.types), pub.types)
+	}
+	if pub.types[0] != events.TypeMessageCreated {
+		t.Errorf("event type = %q, want %q", pub.types[0], events.TypeMessageCreated)
+	}
+	if pub.streams[0] != events.StreamNotifications {
+		t.Errorf("stream = %q, want %q", pub.streams[0], events.StreamNotifications)
+	}
+
+	payload, ok := pub.payloads[0].(events.MessageCreated)
+	if !ok {
+		t.Fatalf("payload type = %T, want events.MessageCreated", pub.payloads[0])
+	}
+	if payload.SenderID != alice || payload.RecipientID != bob {
+		t.Errorf("sender=%s recipient=%s, want sender=%s recipient=%s",
+			payload.SenderID, payload.RecipientID, alice, bob)
+	}
+	if payload.Preview != "ping" {
+		t.Errorf("preview = %q, want %q", payload.Preview, "ping")
 	}
 }
 

@@ -96,6 +96,24 @@ services:
       timeout: 5s
       retries: 5
 
+  worker:
+    build:
+      context: ./backend
+      args:
+        TARGET: worker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      ENV: ${ENV:-development}
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-dating_platform}?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-4}
+    restart: unless-stopped
+
 volumes:
   postgres-data:
   redis-data:

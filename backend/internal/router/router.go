@@ -12,6 +12,7 @@ import (
 	"github.com/bits-assignment/dating-platform/backend/internal/platform/health"
 	"github.com/bits-assignment/dating-platform/backend/internal/platform/httpx"
 	platformmw "github.com/bits-assignment/dating-platform/backend/internal/platform/middleware"
+	"github.com/bits-assignment/dating-platform/backend/internal/platform/queue"
 	"github.com/bits-assignment/dating-platform/backend/internal/platform/ratelimit"
 	"github.com/bits-assignment/dating-platform/backend/internal/repository"
 	"github.com/gorilla/mux"
@@ -87,6 +88,11 @@ func New(deps Deps) http.Handler {
 	v1Protected := v1.PathPrefix("").Subrouter()
 	v1Protected.Use(authMiddleware)
 
+	var publisher messaging.Publisher
+	if deps.Redis != nil {
+		publisher = queue.New(deps.Redis, log, cfg.QueueMaxLen)
+	}
+
 	messagingV1 := messaging.NewHandler(
 		messaging.NewService(
 			messaging.NewStore(pool),
@@ -95,6 +101,8 @@ func New(deps Deps) http.Handler {
 				MaxMessageLength: cfg.MaxMessageLength,
 				MatchGateEnabled: cfg.MatchGateEnabled,
 			},
+			publisher,
+			log,
 		),
 		log,
 		platformmw.RateLimit(platformmw.RateLimitConfig{
