@@ -1,24 +1,10 @@
+// Package config is a compatibility shim over internal/platform/config so that
+// existing importers keep working while the platform package owns the real
+// configuration surface.
 package config
 
-import "os"
+import platformconfig "github.com/bits-assignment/dating-platform/backend/internal/platform/config"
 
-type Config struct {
-	Port        string
-	DatabaseURL string
-	JWTSecret   string
-}
+type Config = platformconfig.Config
 
-func Load() *Config {
-	return &Config{
-		Port:        getEnv("PORT", "8080"),
-		DatabaseURL: getEnv("DATABASE_URL", "postgres://localhost:5432/dating_platform?sslmode=disable"),
-		JWTSecret:   getEnv("JWT_SECRET", "dev-secret-change-in-production"),
-	}
-}
-
-func getEnv(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
-}
+func Load() *Config { return platformconfig.Load() }

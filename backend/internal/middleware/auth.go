@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/bits-assignment/dating-platform/backend/internal/auth"
+	platformmw "github.com/bits-assignment/dating-platform/backend/internal/platform/middleware"
 	"github.com/google/uuid"
 )
 
@@ -31,6 +32,7 @@ func Auth(secret string) func(http.Handler) http.Handler {
 				writeJSON(w, http.StatusUnauthorized, `{"error":"invalid token"}`)
 				return
 			}
+			platformmw.SetUserID(r.Context(), userID.String())
 			ctx := context.WithValue(r.Context(), UserIDKey, userID)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
