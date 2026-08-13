@@ -16,6 +16,10 @@ const infoKey ctxKey = iota
 type requestInfo struct {
 	RequestID string
 	UserID    string
+	TraceID   string
+	// Route is the matched path template. Metrics label on this rather than
+	// the concrete path so ids do not explode label cardinality.
+	Route string
 }
 
 func withInfo(ctx context.Context, info *requestInfo) context.Context {
@@ -40,6 +44,13 @@ func RequestIDFrom(ctx context.Context) string {
 func SetUserID(ctx context.Context, userID string) {
 	if info := infoFrom(ctx); info != nil {
 		info.UserID = userID
+	}
+}
+
+// SetRoute records the matched route template for the current request.
+func SetRoute(ctx context.Context, route string) {
+	if info := infoFrom(ctx); info != nil {
+		info.Route = route
 	}
 }
 

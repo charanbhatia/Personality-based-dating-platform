@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/bits-assignment/dating-platform/backend/internal/platform/httpx"
+	"github.com/bits-assignment/dating-platform/backend/internal/platform/metrics"
 	"github.com/bits-assignment/dating-platform/backend/internal/platform/ratelimit"
 )
 
@@ -78,6 +79,7 @@ func RateLimit(cfg RateLimitConfig) func(http.Handler) http.Handler {
 				w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(res.Remaining))
 
 				if !res.Allowed {
+					metrics.ObserveRateLimitRejection(cfg.Scope)
 					w.Header().Set("Retry-After", strconv.Itoa(int(res.RetryAfter.Seconds())))
 					httpx.WriteError(w, http.StatusTooManyRequests, httpx.CodeRateLimited, "too many requests, please retry later")
 					return
