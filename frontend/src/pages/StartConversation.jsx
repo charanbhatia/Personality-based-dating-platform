@@ -13,8 +13,8 @@ export default function StartConversation() {
     // immediately re-POSTs and forwards again — trapping the user in the chat.
     convApi
       .start(userId)
-      .then((res) => navigate(`/conversations/${res.data.id}`, { replace: true }))
-      .catch(() => navigate('/conversations', { replace: true }));
+      .then((res) => navigate(`/app/conversations/${res.data.id}`, { replace: true }))
+      .catch(() => navigate('/app/conversations', { replace: true }));
   }, [userId, navigate]);
 
   return <Loading text="Starting your conversation…" />;

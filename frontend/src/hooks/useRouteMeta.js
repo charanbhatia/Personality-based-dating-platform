@@ -5,13 +5,15 @@ import { useLocation } from 'react-router-dom';
 // tab, bookmark and history entry reads the same. Set it per route instead, and
 // keep a self-referential canonical so query strings don't fragment the URL.
 const TITLES = [
+  [/^\/$/, null], // landing page keeps the full brand line
   [/^\/login$/, 'Log in'],
   [/^\/register$/, 'Create your account'],
-  [/^\/profile$/, 'Your profile'],
-  [/^\/matches$/, 'Your matches'],
-  [/^\/matches\/.+/, 'Match profile'],
-  [/^\/conversations$/, 'Messages'],
-  [/^\/conversations\/.+/, 'Chat'],
+  [/^\/app\/?$/, 'Home'],
+  [/^\/app\/profile$/, 'Your profile'],
+  [/^\/app\/matches$/, 'Your matches'],
+  [/^\/app\/matches\/.+/, 'Match profile'],
+  [/^\/app\/conversations$/, 'Messages'],
+  [/^\/app\/conversations\/.+/, 'Chat'],
 ];
 
 const FALLBACK = 'Kindred · Meet minds, not just faces';
@@ -21,7 +23,7 @@ export default function useRouteMeta() {
 
   useEffect(() => {
     const hit = TITLES.find(([pattern]) => pattern.test(pathname));
-    document.title = hit ? `${hit[1]} · Kindred` : FALLBACK;
+    document.title = hit && hit[1] ? `${hit[1]} · Kindred` : FALLBACK;
 
     let link = document.head.querySelector('link[rel="canonical"]');
     if (!link) {

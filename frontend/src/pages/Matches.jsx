@@ -29,7 +29,7 @@ export default function Matches() {
           <span className="empty-icon"><IconHeart /></span>
           <h3>No matches yet</h3>
           <p>Complete your profile to help us find people you'll genuinely click with.</p>
-          <Link to="/profile" className="btn btn-primary">Complete profile</Link>
+          <Link to="/app/profile" className="btn btn-primary">Complete profile</Link>
         </div>
       ) : (
         <div className="match-grid stagger">
@@ -62,10 +62,10 @@ export default function Matches() {
                     </div>
                     {m.bio && <p className="match-bio">{m.bio}</p>}
                     <div className="match-actions">
-                      <Link to={`/matches/${m.user_id}`} className="btn btn-ghost">
+                      <Link to={`/app/matches/${m.user_id}`} className="btn btn-ghost">
                         View
                       </Link>
-                      <Link to={`/conversations/start/${m.user_id}`} className="btn btn-primary">
+                      <Link to={`/app/conversations/start/${m.user_id}`} className="btn btn-primary">
                         <IconChat /> Message
                       </Link>
                     </div>

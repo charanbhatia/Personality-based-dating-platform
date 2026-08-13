@@ -24,7 +24,7 @@ export default function MatchDetail() {
             <span className="empty-icon"><IconUser /></span>
             <h3>Profile not found</h3>
             <p>This person may no longer be available.</p>
-            <Link to="/matches" className="btn btn-ghost">Back to matches</Link>
+            <Link to="/app/matches" className="btn btn-ghost">Back to matches</Link>
           </div>
         ) : (
           <ErrorState text="We couldn't load this profile right now." onRetry={retry} />
@@ -64,7 +64,7 @@ export default function MatchDetail() {
 
           {match.bio && <p className="bio">{match.bio}</p>}
 
-          <Link to={`/conversations/start/${match.user_id}`} className="btn btn-primary">
+          <Link to={`/app/conversations/start/${match.user_id}`} className="btn btn-primary">
             <IconChat /> Send a message
           </Link>
         </div>

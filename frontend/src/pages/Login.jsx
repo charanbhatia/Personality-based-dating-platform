@@ -17,7 +17,7 @@ export default function Login() {
     setLoading(true);
     try {
       await login(email, password);
-      navigate('/');
+      navigate('/app');
     } catch (err) {
       // Only errors that came back through the axios interceptor carry a message
       // meant for a user; anything else (a storage quota error, a TypeError)

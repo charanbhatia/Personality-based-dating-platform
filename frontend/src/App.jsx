@@ -23,12 +23,13 @@ import {
   IconLogout,
   IconArrowLeft,
 } from './components/Icons';
+import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import './App.css';
 
-// Login and Dashboard are the two first-paint entry points, so they stay eager.
-// Everything else is only reachable by navigation and can arrive on demand.
+// Landing, Login and Dashboard are the first-paint entry points, so they stay
+// eager. Everything else is only reachable by navigation and arrives on demand.
 const Register = lazy(() => import('./pages/Register'));
 const Profile = lazy(() => import('./pages/Profile'));
 const Matches = lazy(() => import('./pages/Matches'));
@@ -37,10 +38,26 @@ const Conversations = lazy(() => import('./pages/Conversations'));
 const Chat = lazy(() => import('./pages/Chat'));
 const StartConversation = lazy(() => import('./pages/StartConversation'));
 
+// The app moved under /app so that / can be a public page. Old links, bookmarks
+// and anything already shared keep working.
+const LEGACY = [
+  ['/profile', '/app/profile'],
+  ['/matches', '/app/matches'],
+  ['/matches/:id', '/app/matches/:id'],
+  ['/conversations', '/app/conversations'],
+  ['/conversations/start/:userId', '/app/conversations/start/:userId'],
+  ['/conversations/:id', '/app/conversations/:id'],
+];
+
+function LegacyRedirect() {
+  const { pathname, search } = useLocation();
+  return <Navigate to={`/app${pathname}${search}`} replace />;
+}
+
 function PublicOnly({ children }) {
   const { user, loading } = useAuth();
   if (loading) return <Loading text="Getting things ready…" />;
-  if (user) return <Navigate to="/" replace />;
+  if (user) return <Navigate to="/app" replace />;
   return children;
 }
 
@@ -57,16 +74,17 @@ function ProtectedLayout() {
 }
 
 function backTarget(pathname) {
-  if (pathname.startsWith('/conversations/')) return { to: '/conversations', label: 'Back to messages' };
-  if (pathname.startsWith('/matches/')) return { to: '/matches', label: 'Back to matches' };
-  return { to: '/', label: 'Back to home' };
+  if (pathname.startsWith('/app/conversations/'))
+    return { to: '/app/conversations', label: 'Back to messages' };
+  if (pathname.startsWith('/app/matches/')) return { to: '/app/matches', label: 'Back to matches' };
+  return { to: '/app', label: 'Back to home' };
 }
 
 function Layout() {
   const { user, logout } = useAuth();
   const location = useLocation();
   const mainRef = useRef(null);
-  const showBack = location.pathname !== '/';
+  const showBack = location.pathname !== '/app';
   const back = backTarget(location.pathname);
 
   // A client-side navigation leaves focus wherever it was, so keyboard and
@@ -78,21 +96,21 @@ function Layout() {
   return (
     <div className="app-shell">
       <header className="app-header">
-        <Brand />
+        <Brand to="/app" />
         <nav className="header-nav">
-          <NavLink to="/" end className="nav-item">
+          <NavLink to="/app" end className="nav-item">
             <IconCompass />
             <span>Home</span>
           </NavLink>
-          <NavLink to="/matches" className="nav-item">
+          <NavLink to="/app/matches" className="nav-item">
             <IconHeart />
             <span>Matches</span>
           </NavLink>
-          <NavLink to="/conversations" className="nav-item">
+          <NavLink to="/app/conversations" className="nav-item">
             <IconChat />
             <span>Messages</span>
           </NavLink>
-          <NavLink to="/profile" className="nav-item">
+          <NavLink to="/app/profile" className="nav-item">
             <IconUser />
             <span>Profile</span>
           </NavLink>
@@ -145,17 +163,24 @@ function AppRoutes() {
     <ErrorBoundary>
       <Suspense fallback={<Loading text="Getting things ready…" />}>
         <Routes>
+          <Route path="/" element={<Landing />} />
           <Route path="/login" element={<PublicOnly><Login /></PublicOnly>} />
           <Route path="/register" element={<PublicOnly><Register /></PublicOnly>} />
-          <Route element={<ProtectedLayout />}>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/matches" element={<Matches />} />
-            <Route path="/matches/:id" element={<MatchDetail />} />
-            <Route path="/conversations" element={<Conversations />} />
-            <Route path="/conversations/start/:userId" element={<StartConversation />} />
-            <Route path="/conversations/:id" element={<Chat />} />
+
+          <Route path="/app" element={<ProtectedLayout />}>
+            <Route index element={<Dashboard />} />
+            <Route path="profile" element={<Profile />} />
+            <Route path="matches" element={<Matches />} />
+            <Route path="matches/:id" element={<MatchDetail />} />
+            <Route path="conversations" element={<Conversations />} />
+            <Route path="conversations/start/:userId" element={<StartConversation />} />
+            <Route path="conversations/:id" element={<Chat />} />
           </Route>
+
+          {LEGACY.map(([from]) => (
+            <Route key={from} path={from} element={<LegacyRedirect />} />
+          ))}
+
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

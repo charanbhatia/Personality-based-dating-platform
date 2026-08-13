@@ -29,7 +29,7 @@ export default function Conversations() {
           <span className="empty-icon"><IconChat /></span>
           <h3>No conversations yet</h3>
           <p>When you message a match, your chats will show up here.</p>
-          <Link to="/matches" className="btn btn-primary">Find someone to talk to</Link>
+          <Link to="/app/matches" className="btn btn-primary">Find someone to talk to</Link>
         </div>
       ) : (
         <ul className="conv-list stagger">
@@ -38,7 +38,7 @@ export default function Conversations() {
             const short = otherId ? String(otherId).slice(0, 8) : '';
             return (
               <li key={c.id}>
-                <Link to={`/conversations/${c.id}`} className="conv-item">
+                <Link to={`/app/conversations/${c.id}`} className="conv-item">
                   <Avatar name={short || 'Chat'} seed={otherId} size={46} />
                   <span className="conv-text">
                     <span className="conv-title">

@@ -21,7 +21,7 @@ export default function Register() {
       const payload = { email, password, name };
       if (dateOfBirth) payload.date_of_birth = dateOfBirth;
       await register(payload);
-      navigate('/');
+      navigate('/app');
     } catch (err) {
       // See Login.jsx — only interceptor-normalized errors are safe to show.
       setError(err.response || err.code ? err.message : 'Registration failed');

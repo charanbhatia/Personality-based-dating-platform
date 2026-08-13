@@ -1,28 +1,42 @@
 import { useEffect, useId, useRef, useState } from 'react';
 
 /**
- * Animated circular compatibility gauge. The stroke sweeps from 0 to the given
- * percentage the first time it scrolls into view.
+ * Circular compatibility gauge. By default the stroke sweeps up from zero the
+ * first time it scrolls into view; the CSS transition then carries any later
+ * change, so the ring also tracks a value that updates live.
+ *
+ * Only the reveal is stateful — the displayed number is derived from `value`.
+ * Storing it instead meant a changing value could not reach the ring once the
+ * observer had disconnected, and it made every update wait on a
+ * requestAnimationFrame that browsers throttle in a background tab.
  */
-export default function CompatibilityRing({ value = 0, size = 92, stroke = 8, label = 'match' }) {
+export default function CompatibilityRing({
+  value = 0,
+  size = 92,
+  stroke = 8,
+  label = 'match',
+  animateOnView = true,
+}) {
   const pct = Math.max(0, Math.min(100, Math.round(value)));
-  const [shown, setShown] = useState(0);
+  const [revealed, setRevealed] = useState(!animateOnView);
   const ref = useRef(null);
   // Keyed on size, every card in a grid emitted the same id and they all
   // resolved to the first gradient in the document.
   const gradId = useId();
 
+  const shown = revealed ? pct : 0;
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const offset = c - (shown / 100) * c;
 
   useEffect(() => {
+    if (revealed) return;
     const el = ref.current;
     if (!el) return;
     const io = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
-          requestAnimationFrame(() => setShown(pct));
+          setRevealed(true);
           io.disconnect();
         }
       },
@@ -30,7 +44,7 @@ export default function CompatibilityRing({ value = 0, size = 92, stroke = 8, la
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [pct]);
+  }, [revealed]);
 
   const tone = pct >= 80 ? 'var(--green)' : pct >= 60 ? 'var(--violet)' : 'var(--pink)';
 
