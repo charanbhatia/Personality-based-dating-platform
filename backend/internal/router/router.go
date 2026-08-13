@@ -6,6 +6,7 @@ import (
 
 	"github.com/bits-assignment/dating-platform/backend/internal/db"
 	"github.com/bits-assignment/dating-platform/backend/internal/handlers"
+	"github.com/bits-assignment/dating-platform/backend/internal/messaging"
 	"github.com/bits-assignment/dating-platform/backend/internal/middleware"
 	"github.com/bits-assignment/dating-platform/backend/internal/platform/config"
 	"github.com/bits-assignment/dating-platform/backend/internal/platform/health"
@@ -78,6 +79,34 @@ func New(deps Deps) http.Handler {
 	r.HandleFunc("/readyz", healthHandler.Ready).Methods(http.MethodGet)
 	// Retained so existing deployments and the current frontend keep working.
 	r.HandleFunc("/health", healthHandler.Live).Methods(http.MethodGet)
+
+	// v1 is registered before the legacy prefix so /api/v1 never falls through
+	// to the legacy catch-all subrouter.
+	v1 := r.PathPrefix("/api/v1").Subrouter()
+	v1.Use(globalRateLimit)
+	v1Protected := v1.PathPrefix("").Subrouter()
+	v1Protected.Use(authMiddleware)
+
+	messagingV1 := messaging.NewHandler(
+		messaging.NewService(
+			messaging.NewStore(pool),
+			messaging.NewMatchGate(pool),
+			messaging.Config{
+				MaxMessageLength: cfg.MaxMessageLength,
+				MatchGateEnabled: cfg.MatchGateEnabled,
+			},
+		),
+		log,
+		platformmw.RateLimit(platformmw.RateLimitConfig{
+			Limiter:     limiter,
+			Limit:       cfg.MessageSendLimit,
+			Window:      cfg.MessageSendWindow,
+			Scope:       "msg",
+			KeyByUserID: true,
+			Log:         log,
+		}),
+	)
+	messagingV1.RegisterRoutes(v1Protected)
 
 	api := r.PathPrefix("/api").Subrouter()
 	api.Use(globalRateLimit)

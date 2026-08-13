@@ -30,7 +30,10 @@ type RateLimitConfig struct {
 	// KeyByEmail adds a second counter keyed on the request body's email so
 	// credential stuffing cannot be spread across many IPs.
 	KeyByEmail bool
-	Log        *slog.Logger
+	// KeyByUserID counts per authenticated user instead of per IP. Requires the
+	// auth middleware to have run first.
+	KeyByUserID bool
+	Log         *slog.Logger
 }
 
 func RateLimit(cfg RateLimitConfig) func(http.Handler) http.Handler {
@@ -39,7 +42,17 @@ func RateLimit(cfg RateLimitConfig) func(http.Handler) http.Handler {
 			return next
 		}
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			keys := []string{fmt.Sprintf("rl:%s:ip:%s:%s", cfg.Scope, ClientIP(r), r.URL.Path)}
+			var keys []string
+			if cfg.KeyByUserID {
+				userID := UserIDFrom(r.Context())
+				if userID == "" {
+					next.ServeHTTP(w, r)
+					return
+				}
+				keys = append(keys, fmt.Sprintf("rl:%s:user:%s", cfg.Scope, userID))
+			} else {
+				keys = append(keys, fmt.Sprintf("rl:%s:ip:%s:%s", cfg.Scope, ClientIP(r), r.URL.Path))
+			}
 
 			if cfg.KeyByEmail {
 				if email := peekEmail(r); email != "" {
