@@ -1,18 +1,39 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { conversations as convApi } from '../api';
+import { conversations as convApi, matches as matchesApi } from '../api';
 import useFetch from '../hooks/useFetch';
+import { band, isScored } from '../lib/compat';
 import Avatar from '../components/Avatar';
 import Loading from '../components/Loading';
 import ErrorState from '../components/ErrorState';
 import { IconChat, IconArrowLeft } from '../components/Icons';
 
+const day = (iso) =>
+  new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+
 export default function Conversations() {
   const { user } = useAuth();
-  const { data, error, loading, retry } = useFetch(() => convApi.list());
-  const list = data?.conversations || [];
+
+  // The conversations payload carries only ids, so names come from the match
+  // list. A failure there costs us the names, not the page.
+  const { data, error, loading, retry } = useFetch(() =>
+    Promise.all([
+      convApi.list(),
+      matchesApi.list({ limit: 100 }).catch(() => ({ data: { matches: [] } })),
+    ]).then(([conv, people]) => ({
+      data: {
+        conversations: conv.data.conversations || [],
+        people: Object.fromEntries((people.data.matches || []).map((m) => [m.user_id, m])),
+      },
+    }))
+  );
 
   if (loading) return <Loading text="Loading messages…" />;
+
+  const list = [...(data?.conversations || [])].sort(
+    (a, b) => new Date(b.created_at) - new Date(a.created_at)
+  );
+  const people = data?.people || {};
 
   return (
     <div className="page">
@@ -20,7 +41,7 @@ export default function Conversations() {
         <IconChat /> Messages
       </span>
       <h1>Your conversations</h1>
-      <p>Meaningful chats with the people you've matched with.</p>
+      <p>The people you have started talking to.</p>
 
       {error ? (
         <ErrorState text="We couldn't load your conversations right now." onRetry={retry} />
@@ -28,23 +49,33 @@ export default function Conversations() {
         <div className="empty-state">
           <span className="empty-icon"><IconChat /></span>
           <h3>No conversations yet</h3>
-          <p>When you message a match, your chats will show up here.</p>
+          <p>When you message someone, your chats will show up here.</p>
           <Link to="/app/matches" className="btn btn-primary">Find someone to talk to</Link>
         </div>
       ) : (
         <ul className="conv-list stagger">
           {list.map((c) => {
             const otherId = c.user1_id === user?.id ? c.user2_id : c.user1_id;
-            const short = otherId ? String(otherId).slice(0, 8) : '';
+            const peer = people[otherId];
             return (
               <li key={c.id}>
-                <Link to={`/app/conversations/${c.id}`} className="conv-item">
-                  <Avatar name={short || 'Chat'} seed={otherId} size={46} />
+                <Link
+                  to={`/app/conversations/${c.id}`}
+                  state={{ name: peer?.name, bio: peer?.bio }}
+                  className="conv-item"
+                >
+                  <Avatar
+                    name={peer?.name}
+                    src={peer?.photo_url || undefined}
+                    seed={otherId}
+                    size={44}
+                  />
                   <span className="conv-text">
-                    <span className="conv-title">
-                      {otherId ? `Conversation · ${short}` : 'Conversation'}
+                    <span className="conv-title">{peer?.name || 'Conversation'}</span>
+                    <span className="conv-sub">
+                      Started {day(c.created_at)}
+                      {peer && isScored(peer.score) ? ` · ${band(peer.score)}` : ''}
                     </span>
-                    <span className="conv-sub">Tap to open the chat</span>
                   </span>
                   <span className="conv-arrow">
                     <IconArrowLeft style={{ transform: 'rotate(180deg)' }} />

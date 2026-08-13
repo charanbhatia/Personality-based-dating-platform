@@ -17,18 +17,16 @@ import useRouteMeta from './hooks/useRouteMeta';
 import {
   IconUser,
   IconHeart,
-  IconCompass,
   IconChat,
   IconLogout,
   IconArrowLeft,
 } from './components/Icons';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
 import './App.css';
 
-// Landing, Login and Dashboard are the first-paint entry points, so they stay
-// eager. Everything else is only reachable by navigation and arrives on demand.
+// Landing and Login are the first-paint entry points, so they stay eager.
+// Everything else is only reachable by navigation and arrives on demand.
 const Register = lazy(() => import('./pages/Register'));
 const Profile = lazy(() => import('./pages/Profile'));
 const Matches = lazy(() => import('./pages/Matches'));
@@ -72,18 +70,18 @@ function ProtectedLayout() {
   return <Layout />;
 }
 
+// Only the nested screens get a back bar; the top-level ones have the nav.
 function backTarget(pathname) {
   if (pathname.startsWith('/app/conversations/'))
     return { to: '/app/conversations', label: 'Back to messages' };
   if (pathname.startsWith('/app/matches/')) return { to: '/app/matches', label: 'Back to matches' };
-  return { to: '/app', label: 'Back to home' };
+  return null;
 }
 
 function Layout() {
   const { user, logout } = useAuth();
   const location = useLocation();
   const mainRef = useRef(null);
-  const showBack = location.pathname !== '/app';
   const back = backTarget(location.pathname);
 
   // A client-side navigation leaves focus wherever it was, so keyboard and
@@ -97,10 +95,6 @@ function Layout() {
       <header className="app-header">
         <Brand to="/app" />
         <nav className="header-nav">
-          <NavLink to="/app" end className="nav-item">
-            <IconCompass />
-            <span>Home</span>
-          </NavLink>
           <NavLink to="/app/matches" className="nav-item">
             <IconHeart />
             <span>Matches</span>
@@ -134,7 +128,7 @@ function Layout() {
         </div>
       </header>
       <main className="app-main" ref={mainRef} tabIndex={-1}>
-        {showBack && (
+        {back && (
           <div className="back-bar">
             <Link to={back.to} className="btn-back">
               <IconArrowLeft /> {back.label}
@@ -167,7 +161,7 @@ function AppRoutes() {
           <Route path="/register" element={<PublicOnly><Register /></PublicOnly>} />
 
           <Route path="/app" element={<ProtectedLayout />}>
-            <Route index element={<Dashboard />} />
+            <Route index element={<Navigate to="matches" replace />} />
             <Route path="profile" element={<Profile />} />
             <Route path="matches" element={<Matches />} />
             <Route path="matches/:id" element={<MatchDetail />} />
