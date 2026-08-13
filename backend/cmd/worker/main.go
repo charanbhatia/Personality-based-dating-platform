@@ -2,13 +2,16 @@ package main
 
 import (
 	"context"
+	"log/slog"
 	"os"
 	"os/signal"
 	"sync"
 	"syscall"
 
 	"github.com/bits-assignment/dating-platform/backend/internal/db"
+	"github.com/bits-assignment/dating-platform/backend/internal/media"
 	"github.com/bits-assignment/dating-platform/backend/internal/platform/config"
+	"github.com/bits-assignment/dating-platform/backend/internal/platform/events"
 	"github.com/bits-assignment/dating-platform/backend/internal/platform/logging"
 	"github.com/bits-assignment/dating-platform/backend/internal/platform/queue"
 	platformredis "github.com/bits-assignment/dating-platform/backend/internal/platform/redis"
@@ -50,7 +53,11 @@ func main() {
 	defer redisClient.Close()
 
 	q := queue.New(redisClient, log, cfg.QueueMaxLen)
-	consumers := registerConsumers()
+	consumers, err := registerConsumers(cfg, q, log)
+	if err != nil {
+		log.Error("consumer registration failed", "error", err)
+		os.Exit(1)
+	}
 	if len(consumers) == 0 {
 		log.Warn("worker started with no consumers registered")
 	}
@@ -84,6 +91,22 @@ func main() {
 	log.Info("worker stopped")
 }
 
-func registerConsumers() []consumer {
-	return nil
+func registerConsumers(cfg *config.Config, q *queue.Queue, log *slog.Logger) ([]consumer, error) {
+	var consumers []consumer
+
+	if cfg.MediaEnabled() {
+		mediaSvc, err := media.NewServiceFromConfig(db.Pool, cfg, q, log)
+		if err != nil {
+			return nil, err
+		}
+		consumers = append(consumers, consumer{
+			stream:  events.StreamMedia,
+			group:   "media-workers",
+			handler: media.ProcessHandler(mediaSvc),
+		})
+	} else {
+		log.Warn("object storage not configured; media processing disabled")
+	}
+
+	return consumers, nil
 }

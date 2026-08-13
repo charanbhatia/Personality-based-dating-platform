@@ -13,7 +13,10 @@ import (
 const (
 	StreamNotifications = "queue:notifications"
 	StreamEmail         = "queue:email"
-	StreamMedia         = "queue:media"
+	// StreamMedia carries work for the media worker; results are announced on
+	// StreamMediaEvents so the worker does not consume its own output.
+	StreamMedia       = "queue:media"
+	StreamMediaEvents = "queue:media.events"
 )
 
 // Event types.
@@ -21,6 +24,7 @@ const (
 	TypeMatchCreated           = "match.created"
 	TypeUserBlocked            = "user.blocked"
 	TypeMessageCreated         = "message.created"
+	TypeMediaProcess           = "media.process"
 	TypeMediaProcessed         = "media.processed"
 	TypePasswordResetRequested = "auth.password_reset_requested"
 )
@@ -43,6 +47,13 @@ type MessageCreated struct {
 	SenderID       uuid.UUID `json:"sender_id"`
 	RecipientID    uuid.UUID `json:"recipient_id"`
 	Preview        string    `json:"preview"`
+}
+
+// MediaProcess is a job, not a fact: it asks the media worker to build
+// derivatives for an uploaded asset.
+type MediaProcess struct {
+	AssetID uuid.UUID `json:"asset_id"`
+	UserID  uuid.UUID `json:"user_id"`
 }
 
 type MediaProcessed struct {

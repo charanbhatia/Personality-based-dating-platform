@@ -45,7 +45,11 @@ func main() {
 		log.Warn("redis not configured; rate limiting disabled")
 	}
 
-	handler := router.New(router.Deps{Config: cfg, Redis: redisClient, Logger: log})
+	handler, err := router.New(router.Deps{Config: cfg, Redis: redisClient, Logger: log})
+	if err != nil {
+		log.Error("router init failed", "error", err)
+		os.Exit(1)
+	}
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
 		Handler:           handler,

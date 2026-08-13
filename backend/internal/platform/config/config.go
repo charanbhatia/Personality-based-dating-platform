@@ -34,6 +34,20 @@ type Config struct {
 	QueueBlockTimeout time.Duration
 	WorkerConcurrency int
 	WorkerName        string
+
+	S3Endpoint      string
+	S3Region        string
+	S3Bucket        string
+	S3AccessKey     string
+	S3SecretKey     string
+	S3PublicBaseURL string
+	S3PathStyle     bool
+	S3PresignTTL    time.Duration
+
+	MediaMaxBytes     int64
+	MediaAllowedTypes []string
+	MediaDailyLimit   int
+	ThumbnailMaxEdge  int
 }
 
 func Load() *Config {
@@ -64,7 +78,27 @@ func Load() *Config {
 		QueueBlockTimeout: time.Duration(getInt("QUEUE_BLOCK_SECONDS", 5)) * time.Second,
 		WorkerConcurrency: getInt("WORKER_CONCURRENCY", 4),
 		WorkerName:        getEnv("WORKER_NAME", defaultWorkerName()),
+
+		S3Endpoint:      getEnv("S3_ENDPOINT", ""),
+		S3Region:        getEnv("S3_REGION", "us-east-1"),
+		S3Bucket:        getEnv("S3_BUCKET", "dating-media"),
+		S3AccessKey:     getEnv("S3_ACCESS_KEY", ""),
+		S3SecretKey:     getEnv("S3_SECRET_KEY", ""),
+		S3PublicBaseURL: getEnv("S3_PUBLIC_BASE_URL", ""),
+		S3PathStyle:     getBool("S3_PATH_STYLE", true),
+		S3PresignTTL:    time.Duration(getInt("S3_PRESIGN_TTL_SECONDS", 900)) * time.Second,
+
+		MediaMaxBytes:     int64(getInt("MEDIA_MAX_BYTES", 10<<20)),
+		MediaAllowedTypes: getCSV("MEDIA_ALLOWED_TYPES", "image/jpeg,image/png,image/webp"),
+		MediaDailyLimit:   getInt("MEDIA_DAILY_UPLOAD_LIMIT", 50),
+		ThumbnailMaxEdge:  getInt("THUMBNAIL_MAX_EDGE", 512),
 	}
+}
+
+// MediaEnabled reports whether object storage is configured. Media endpoints
+// answer 503 when it is not, leaving the rest of the API usable.
+func (c *Config) MediaEnabled() bool {
+	return c.S3Endpoint != "" && c.S3AccessKey != "" && c.S3SecretKey != ""
 }
 
 // defaultWorkerName keeps consumer names distinct per process so Redis can tell

@@ -3,9 +3,11 @@ package router
 import (
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/bits-assignment/dating-platform/backend/internal/db"
 	"github.com/bits-assignment/dating-platform/backend/internal/handlers"
+	"github.com/bits-assignment/dating-platform/backend/internal/media"
 	"github.com/bits-assignment/dating-platform/backend/internal/messaging"
 	"github.com/bits-assignment/dating-platform/backend/internal/middleware"
 	"github.com/bits-assignment/dating-platform/backend/internal/platform/config"
@@ -25,7 +27,7 @@ type Deps struct {
 	Logger *slog.Logger
 }
 
-func New(deps Deps) http.Handler {
+func New(deps Deps) (http.Handler, error) {
 	cfg := deps.Config
 	log := deps.Logger
 	pool := db.Pool
@@ -116,6 +118,19 @@ func New(deps Deps) http.Handler {
 	)
 	messagingV1.RegisterRoutes(v1Protected)
 
+	mediaSvc, err := media.NewServiceFromConfig(pool, cfg, publisher, log)
+	if err != nil {
+		return nil, err
+	}
+	media.NewHandler(mediaSvc, log, platformmw.RateLimit(platformmw.RateLimitConfig{
+		Limiter:     limiter,
+		Limit:       cfg.MediaDailyLimit,
+		Window:      24 * time.Hour,
+		Scope:       "media",
+		KeyByUserID: true,
+		Log:         log,
+	})).RegisterRoutes(v1Protected)
+
 	api := r.PathPrefix("/api").Subrouter()
 	api.Use(globalRateLimit)
 
@@ -141,5 +156,5 @@ func New(deps Deps) http.Handler {
 	handler = platformmw.Recover(log)(handler)
 	handler = platformmw.Logger(log)(handler)
 	handler = platformmw.RequestID(handler)
-	return handler
+	return handler, nil
 }
