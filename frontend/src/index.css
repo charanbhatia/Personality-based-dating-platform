@@ -11,11 +11,8 @@
 :root {
   /* ---- Palette ---- */
   --bg-0: #07070d;
-  --bg-1: #0b0b16;
-  --bg-2: #10101f;
 
   --surface: rgba(23, 23, 40, 0.55);
-  --surface-solid: #14142400;
   --surface-strong: rgba(30, 30, 52, 0.72);
   --border: rgba(255, 255, 255, 0.08);
   --border-strong: rgba(255, 255, 255, 0.16);
@@ -28,16 +25,11 @@
   --rose: #ff4d7d;
   --pink: #ff6fae;
   --violet: #a855f7;
-  --indigo: #6366f1;
-  --cyan: #22d3ee;
-  --amber: #fbbf24;
   --green: #34d399;
 
   /* ---- Signature gradients ---- */
   --grad-brand: linear-gradient(120deg, #ff4d7d 0%, #b14bff 50%, #6366f1 100%);
   --grad-brand-soft: linear-gradient(120deg, rgba(255, 77, 125, 0.18), rgba(99, 102, 241, 0.18));
-  --grad-warm: linear-gradient(135deg, #ff6fae 0%, #ff8a5c 100%);
-  --grad-aurora: linear-gradient(120deg, #22d3ee, #a855f7, #ff4d7d);
 
   /* ---- Elevation ---- */
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
@@ -47,7 +39,6 @@
   --glow-rose: 0 12px 44px -10px rgba(255, 77, 125, 0.55);
 
   /* ---- Radius ---- */
-  --r-sm: 10px;
   --r-md: 16px;
   --r-lg: 22px;
   --r-xl: 30px;
@@ -100,8 +91,7 @@ body {
 h1,
 h2,
 h3,
-h4,
-.font-display {
+h4 {
   font-family: 'Sora', 'Inter', system-ui, sans-serif;
   letter-spacing: -0.02em;
 }

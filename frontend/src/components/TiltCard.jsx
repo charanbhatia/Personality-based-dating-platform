@@ -1,9 +1,13 @@
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 
 /**
  * 3D tilt wrapper. Tracks the pointer and applies a perspective rotation plus a
- * light "glare" that follows the cursor. Falls back gracefully (no motion) for
- * users who prefer reduced motion, and is disabled on touch/coarse pointers.
+ * light "glare" that follows the cursor.
+ *
+ * Whether the effect runs at all is decided in CSS (`@media (hover: hover) and
+ * (prefers-reduced-motion: no-preference)`), not here: matchMedia read once
+ * during render goes stale the moment someone toggles reduced motion or picks
+ * up a touchscreen, and it left the CSS hover states running on touch anyway.
  */
 export default function TiltCard({
   children,
@@ -16,16 +20,10 @@ export default function TiltCard({
   const ref = useRef(null);
   const frame = useRef(0);
 
-  const prefersReduced =
-    typeof window !== 'undefined' &&
-    window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  const coarsePointer =
-    typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
-  const enabled = !prefersReduced && !coarsePointer;
+  useEffect(() => () => cancelAnimationFrame(frame.current), []);
 
   const handleMove = useCallback(
     (e) => {
-      if (!enabled) return;
       const el = ref.current;
       if (!el) return;
       cancelAnimationFrame(frame.current);
@@ -41,7 +39,7 @@ export default function TiltCard({
         el.style.setProperty('--my', `${(py * 100).toFixed(1)}%`);
       });
     },
-    [enabled, max]
+    [max]
   );
 
   const reset = useCallback(() => {
@@ -55,7 +53,7 @@ export default function TiltCard({
   return (
     <div
       ref={ref}
-      className={`tilt ${enabled ? 'tilt--on' : ''} ${className}`}
+      className={`tilt ${className}`}
       onMouseMove={handleMove}
       onMouseLeave={reset}
       style={style}
@@ -63,7 +61,7 @@ export default function TiltCard({
     >
       <div className="tilt-inner">
         {children}
-        {glare && enabled && <span className="tilt-glare" />}
+        {glare && <span className="tilt-glare" />}
       </div>
     </div>
   );

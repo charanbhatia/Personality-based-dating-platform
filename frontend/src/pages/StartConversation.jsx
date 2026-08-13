@@ -9,10 +9,12 @@ export default function StartConversation() {
 
   useEffect(() => {
     if (!userId) return;
+    // `replace` matters: without it, Back returns to this interstitial, which
+    // immediately re-POSTs and forwards again — trapping the user in the chat.
     convApi
       .start(userId)
-      .then((res) => navigate(`/conversations/${res.data.id}`))
-      .catch(() => navigate('/conversations'));
+      .then((res) => navigate(`/conversations/${res.data.id}`, { replace: true }))
+      .catch(() => navigate('/conversations', { replace: true }));
   }, [userId, navigate]);
 
   return <Loading text="Starting your conversation…" />;

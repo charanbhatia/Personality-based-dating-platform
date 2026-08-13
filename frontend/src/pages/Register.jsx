@@ -23,11 +23,8 @@ export default function Register() {
       await register(payload);
       navigate('/');
     } catch (err) {
-      if (err.code === 'ERR_NETWORK' || err.message === 'Network Error') {
-        setError('Cannot reach server. Is the backend running at http://localhost:8080?');
-      } else {
-        setError(err.response?.data?.error || 'Registration failed');
-      }
+      // See Login.jsx — only interceptor-normalized errors are safe to show.
+      setError(err.response || err.code ? err.message : 'Registration failed');
     } finally {
       setLoading(false);
     }
@@ -39,7 +36,7 @@ export default function Register() {
         <h1>Create your account</h1>
         <p className="auth-sub">A few details and you'll start meeting kindred spirits.</p>
         <form onSubmit={handleSubmit}>
-          {error && <p className="alert alert-error error">{error}</p>}
+          {error && <div className="alert alert-error" role="alert">{error}</div>}
           <div className="field">
             <label htmlFor="name">Name</label>
             <input

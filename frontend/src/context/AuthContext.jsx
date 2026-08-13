@@ -5,22 +5,18 @@ const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  // No token means there is nothing to verify, so we are never in a loading state.
+  const [loading, setLoading] = useState(() => Boolean(localStorage.getItem('token')));
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      setLoading(false);
-      return;
-    }
+    if (!localStorage.getItem('token')) return;
     authApi
       .me()
-      .then((res) => {
-        setUser(res.data);
-      })
-      .catch(() => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
+      .then((res) => setUser(res.data))
+      .catch((err) => {
+        // Only a genuine 401 means the token is dead. A network blip or a
+        // restarted backend must not silently sign the user out.
+        if (err.response?.status === 401) localStorage.removeItem('token');
       })
       .finally(() => setLoading(false));
   }, []);
@@ -29,7 +25,6 @@ export function AuthProvider({ children }) {
     const res = await authApi.login({ email, password });
     const { user: u, token } = res.data;
     localStorage.setItem('token', token);
-    localStorage.setItem('user', JSON.stringify(u));
     setUser(u);
     return u;
   };
@@ -38,13 +33,14 @@ export function AuthProvider({ children }) {
     const res = await authApi.register(data);
     const { user: u, token } = res.data;
     localStorage.setItem('token', token);
-    localStorage.setItem('user', JSON.stringify(u));
     setUser(u);
     return u;
   };
 
   const logout = () => {
     localStorage.removeItem('token');
+    // Nothing writes 'user' any more, but earlier builds cached name/email
+    // there. Drain it as existing sessions cycle rather than leaving PII behind.
     localStorage.removeItem('user');
     setUser(null);
   };
@@ -56,6 +52,7 @@ export function AuthProvider({ children }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error('useAuth must be used within AuthProvider');

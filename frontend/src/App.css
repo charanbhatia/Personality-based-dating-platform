@@ -136,12 +136,6 @@
 .brand-name b {
   font-weight: 800;
 }
-.brand-name span {
-  background: var(--grad-brand);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
 
 .header-nav {
   display: flex;
@@ -223,6 +217,12 @@
   max-width: 1180px;
   margin: 0 auto;
   padding: 2rem 1.6rem 3rem;
+}
+/* Focused programmatically on every navigation so assistive tech lands in the
+   new page. It is a container, not a control, so it must not paint the UA's
+   focus ring around the whole viewport. */
+.app-main:focus {
+  outline: none;
 }
 
 /* ---------- Back bar ---------- */
@@ -397,10 +397,6 @@
   transform-style: preserve-3d;
   transition: transform 0.4s var(--ease-out);
 }
-.tilt--on .tilt-inner {
-  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
-  transition: transform 0.12s ease-out;
-}
 .tilt-glare {
   position: absolute;
   inset: 0;
@@ -414,8 +410,21 @@
   transition: opacity 0.3s var(--ease-out);
   pointer-events: none;
 }
-.tilt--on:hover .tilt-glare {
-  opacity: 1;
+/* Hover affordances live behind a real pointer. On a touch screen :hover latches
+   after a tap and stays stuck until the next tap elsewhere, so cards would sit
+   lifted and glowing with no way to dismiss them. */
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  /* On .tilt-inner, not on :hover — otherwise the rule stops matching on
+     mouseleave and the card settles back at the 0.4s base rate instead. */
+  .tilt-inner {
+    transition: transform 0.12s ease-out;
+  }
+  .tilt:hover .tilt-inner {
+    transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  }
+  .tilt:hover .tilt-glare {
+    opacity: 1;
+  }
 }
 
 /* ---------- Auth pages ---------- */
@@ -537,9 +546,6 @@
 .input,
 .page form textarea,
 .page form input[type='text'],
-.page form input[type='email'],
-.page form input[type='password'],
-.page form input[type='date'],
 .auth-page input,
 .form-select {
   width: 100%;
@@ -591,8 +597,7 @@
   gap: 0.5rem;
   animation: routeIn 0.35s var(--ease-out) both;
 }
-.alert-error,
-.auth-page .error {
+.alert-error {
   background: rgba(255, 77, 125, 0.12);
   border: 1px solid rgba(255, 77, 125, 0.35);
   color: #ffa6c0;
@@ -677,9 +682,11 @@
   transition: border-color 0.3s var(--ease-out), box-shadow 0.3s var(--ease-out),
     transform 0.3s var(--ease-out);
 }
-.tilt:hover .feature-card {
-  border-color: var(--border-strong);
-  box-shadow: var(--glow-brand);
+@media (hover: hover) {
+  .tilt:hover .feature-card {
+    border-color: var(--border-strong);
+    box-shadow: var(--glow-brand);
+  }
 }
 .feature-icon {
   display: grid;
@@ -725,8 +732,10 @@
   height: 16px;
   transition: transform 0.2s var(--ease-out);
 }
-.tilt:hover .feature-cta svg {
-  transform: translateX(4px);
+@media (hover: hover) {
+  .tilt:hover .feature-cta svg {
+    transform: translateX(4px);
+  }
 }
 
 /* ---------- Stagger utility ---------- */
@@ -772,9 +781,11 @@
   box-shadow: var(--shadow-sm);
   transition: border-color 0.3s var(--ease-out), box-shadow 0.3s var(--ease-out);
 }
-.tilt:hover .match-card {
-  border-color: var(--border-strong);
-  box-shadow: var(--glow-brand);
+@media (hover: hover) {
+  .tilt:hover .match-card {
+    border-color: var(--border-strong);
+    box-shadow: var(--glow-brand);
+  }
 }
 .match-media {
   position: relative;
@@ -788,10 +799,12 @@
   object-fit: cover;
   transition: transform 0.6s var(--ease-out);
 }
-.tilt:hover .match-media img {
-  transform: scale(1.06);
+@media (hover: hover) {
+  .tilt:hover .match-media img {
+    transform: scale(1.06);
+  }
 }
-.match-media .match-media-fallback {
+.match-media-fallback {
   width: 100%;
   height: 100%;
   display: grid;
@@ -898,12 +911,6 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-}
-.match-detail-media .match-media-fallback {
-  width: 100%;
-  height: 100%;
-  display: grid;
-  place-items: center;
 }
 .match-detail-info h1 {
   margin: 0 0 0.3rem;
@@ -1082,9 +1089,8 @@
   flex: 1;
   border-radius: var(--r-pill);
 }
-.chat-form .btn {
-  padding: 0.75rem 1.1rem;
-  border-radius: var(--r-pill);
+.chat-alert {
+  margin: 0 1.3rem 0.6rem;
 }
 .chat-send {
   display: inline-grid;

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 
 /**
  * Animated circular compatibility gauge. The stroke sweeps from 0 to the given
@@ -8,6 +8,9 @@ export default function CompatibilityRing({ value = 0, size = 92, stroke = 8, la
   const pct = Math.max(0, Math.min(100, Math.round(value)));
   const [shown, setShown] = useState(0);
   const ref = useRef(null);
+  // Keyed on size, every card in a grid emitted the same id and they all
+  // resolved to the first gradient in the document.
+  const gradId = useId();
 
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
@@ -35,7 +38,7 @@ export default function CompatibilityRing({ value = 0, size = 92, stroke = 8, la
     <div ref={ref} className="ring" style={{ width: size, height: size }}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
         <defs>
-          <linearGradient id={`ring-grad-${size}`} x1="0%" y1="0%" x2="100%" y2="100%">
+          <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor="#ff4d7d" />
             <stop offset="55%" stopColor="#b14bff" />
             <stop offset="100%" stopColor="#6366f1" />
@@ -54,7 +57,7 @@ export default function CompatibilityRing({ value = 0, size = 92, stroke = 8, la
           cy={size / 2}
           r={r}
           fill="none"
-          stroke={`url(#ring-grad-${size})`}
+          stroke={`url(#${gradId})`}
           strokeWidth={stroke}
           strokeLinecap="round"
           strokeDasharray={c}

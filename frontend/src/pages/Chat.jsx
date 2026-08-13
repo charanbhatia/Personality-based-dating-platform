@@ -15,6 +15,7 @@ export default function Chat() {
   const [messages, setMessages] = useState([]);
   const [content, setContent] = useState('');
   const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState('');
   const bottomRef = useRef(null);
 
   // History seeds the thread; sends append to it locally from there.
@@ -30,12 +31,14 @@ export default function Chat() {
     e.preventDefault();
     if (!content.trim() || sending) return;
     setSending(true);
+    setSendError('');
     try {
       const res = await convApi.sendMessage(id, content.trim());
       setMessages((prev) => [...prev, res.data]);
       setContent('');
-    } catch {
-      /* ignore send error for now */
+    } catch (err) {
+      // Keep whatever they typed in the box so the message isn't lost.
+      setSendError(err.message);
     } finally {
       setSending(false);
     }
@@ -83,14 +86,26 @@ export default function Chat() {
         <div ref={bottomRef} />
       </div>
 
+      {sendError && (
+        <div className="alert alert-error chat-alert" role="alert">
+          {sendError}
+        </div>
+      )}
+
       <form onSubmit={handleSend} className="chat-form">
         <input
           className="input"
           value={content}
           onChange={(e) => setContent(e.target.value)}
           placeholder="Type a message…"
+          aria-label="Message"
         />
-        <button type="submit" className="chat-send" disabled={sending || !content.trim()} title="Send">
+        <button
+          type="submit"
+          className="chat-send"
+          disabled={sending || !content.trim()}
+          aria-label="Send message"
+        >
           <IconSend />
         </button>
       </form>
