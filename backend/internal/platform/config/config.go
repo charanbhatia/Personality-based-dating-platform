@@ -49,6 +49,12 @@ type Config struct {
 	MediaDailyLimit   int
 	ThumbnailMaxEdge  int
 
+	WSAllowedOrigins  []string
+	WSMaxMessageBytes int64
+	WSPingInterval    time.Duration
+	WSPongTimeout     time.Duration
+	WSWriteTimeout    time.Duration
+
 	AppBaseURL   string
 	EmailMode    string
 	EmailFrom    string
@@ -100,6 +106,12 @@ func Load() *Config {
 		MediaAllowedTypes: getCSV("MEDIA_ALLOWED_TYPES", "image/jpeg,image/png,image/webp"),
 		MediaDailyLimit:   getInt("MEDIA_DAILY_UPLOAD_LIMIT", 50),
 		ThumbnailMaxEdge:  getInt("THUMBNAIL_MAX_EDGE", 512),
+
+		WSAllowedOrigins:  getCSV("WS_ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000"),
+		WSMaxMessageBytes: int64(getInt("WS_MAX_MESSAGE_BYTES", 16<<10)),
+		WSPingInterval:    time.Duration(getInt("WS_PING_INTERVAL_SECONDS", 30)) * time.Second,
+		WSPongTimeout:     time.Duration(getInt("WS_PONG_TIMEOUT_SECONDS", 70)) * time.Second,
+		WSWriteTimeout:    time.Duration(getInt("WS_WRITE_TIMEOUT_SECONDS", 10)) * time.Second,
 
 		AppBaseURL:   getEnv("APP_BASE_URL", "http://localhost:5173"),
 		EmailMode:    getEnv("EMAIL_MODE", "log"),

@@ -45,10 +45,9 @@ func testRedis(t *testing.T) *goredis.Client {
 	if err != nil {
 		t.Fatalf("parse redis url: %v", err)
 	}
+	// Counters are keyed by user id, which is unique per test, so there is no
+	// need to flush a database other packages may be using.
 	client := goredis.NewClient(opt)
-	if err := client.FlushDB(context.Background()).Err(); err != nil {
-		t.Fatalf("flush redis: %v", err)
-	}
 	t.Cleanup(func() { _ = client.Close() })
 	return client
 }

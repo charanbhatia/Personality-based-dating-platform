@@ -1,6 +1,7 @@
 package router
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"time"
@@ -17,6 +18,7 @@ import (
 	platformmw "github.com/bits-assignment/dating-platform/backend/internal/platform/middleware"
 	"github.com/bits-assignment/dating-platform/backend/internal/platform/queue"
 	"github.com/bits-assignment/dating-platform/backend/internal/platform/ratelimit"
+	"github.com/bits-assignment/dating-platform/backend/internal/realtime"
 	"github.com/bits-assignment/dating-platform/backend/internal/repository"
 	"github.com/gorilla/mux"
 	goredis "github.com/redis/go-redis/v9"
@@ -26,11 +28,17 @@ type Deps struct {
 	Config *config.Config
 	Redis  *goredis.Client
 	Logger *slog.Logger
+	// Context bounds background work owned by the router, such as the
+	// realtime hub's Redis subscription loop.
+	Context context.Context
 }
 
 func New(deps Deps) (http.Handler, error) {
 	cfg := deps.Config
 	log := deps.Logger
+	if deps.Context == nil {
+		deps.Context = context.Background()
+	}
 	pool := db.Pool
 
 	userRepo := repository.NewUserRepo(pool)
@@ -96,17 +104,35 @@ func New(deps Deps) (http.Handler, error) {
 		publisher = queue.New(deps.Redis, log, cfg.QueueMaxLen)
 	}
 
+	messagingSvc := messaging.NewService(
+		messaging.NewStore(pool),
+		messaging.NewMatchGate(pool),
+		messaging.Config{
+			MaxMessageLength: cfg.MaxMessageLength,
+			MatchGateEnabled: cfg.MatchGateEnabled,
+		},
+		publisher,
+		log,
+	)
+
+	hub := realtime.NewHub(deps.Redis, log)
+	go hub.Run(deps.Context)
+	messagingSvc.WithBroadcaster(realtime.NewPublisher(deps.Redis, hub))
+
+	wsServer := realtime.NewServer(hub, messagingSvc, limiter, realtime.Config{
+		AllowedOrigins:  cfg.WSAllowedOrigins,
+		MaxMessageBytes: cfg.WSMaxMessageBytes,
+		PingInterval:    cfg.WSPingInterval,
+		PongTimeout:     cfg.WSPongTimeout,
+		WriteTimeout:    cfg.WSWriteTimeout,
+		JWTSecret:       cfg.JWTSecret,
+		SendLimit:       cfg.MessageSendLimit,
+		SendWindow:      cfg.MessageSendWindow,
+	}, log)
+	r.HandleFunc("/ws", wsServer.Handle).Methods(http.MethodGet)
+
 	messagingV1 := messaging.NewHandler(
-		messaging.NewService(
-			messaging.NewStore(pool),
-			messaging.NewMatchGate(pool),
-			messaging.Config{
-				MaxMessageLength: cfg.MaxMessageLength,
-				MatchGateEnabled: cfg.MatchGateEnabled,
-			},
-			publisher,
-			log,
-		),
+		messagingSvc,
 		log,
 		platformmw.RateLimit(platformmw.RateLimitConfig{
 			Limiter:     limiter,

@@ -45,7 +45,10 @@ func main() {
 		log.Warn("redis not configured; rate limiting disabled")
 	}
 
-	handler, err := router.New(router.Deps{Config: cfg, Redis: redisClient, Logger: log})
+	rootCtx, stopBackground := context.WithCancel(context.Background())
+	defer stopBackground()
+
+	handler, err := router.New(router.Deps{Config: cfg, Redis: redisClient, Logger: log, Context: rootCtx})
 	if err != nil {
 		log.Error("router init failed", "error", err)
 		os.Exit(1)

@@ -5,9 +5,14 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/bits-assignment/dating-platform/backend/internal/auth"
 	"github.com/bits-assignment/dating-platform/backend/internal/platform/config"
+	"github.com/google/uuid"
+	"github.com/gorilla/websocket"
 )
 
 func testHandler(t *testing.T) http.Handler {
@@ -107,6 +112,60 @@ func TestLegacyRoutesStillRequireAuth(t *testing.T) {
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("GET %s = %d, want 401", p, rec.Code)
 		}
+	}
+}
+
+// The websocket upgrade runs through the full middleware chain. The access
+// logger wraps the ResponseWriter, and the upgrader type-asserts it to
+// http.Hijacker, so the wrapper has to forward that method.
+func TestWebSocketUpgradeSurvivesTheMiddlewareChain(t *testing.T) {
+	cfg := config.Load()
+	cfg.RateLimitEnabled = false
+	cfg.WSAllowedOrigins = []string{"*"}
+
+	handler, err := New(Deps{Config: cfg, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	if err != nil {
+		t.Fatalf("build router: %v", err)
+	}
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	userID := uuid.New()
+	token, err := auth.NewJWT(cfg.JWTSecret, userID)
+	if err != nil {
+		t.Fatalf("mint token: %v", err)
+	}
+
+	url := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws?access_token=" + token
+	conn, resp, err := websocket.DefaultDialer.Dial(url, nil)
+	if err != nil {
+		status := 0
+		if resp != nil {
+			status = resp.StatusCode
+		}
+		t.Fatalf("upgrade failed through the middleware chain: %v (status %d)", err, status)
+	}
+	defer conn.Close()
+
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	var frame struct {
+		Type string `json:"type"`
+	}
+	if err := conn.ReadJSON(&frame); err != nil {
+		t.Fatalf("read greeting: %v", err)
+	}
+	if frame.Type != "connected" {
+		t.Errorf("first frame = %q, want connected", frame.Type)
+	}
+}
+
+func TestWebSocketRejectsMissingToken(t *testing.T) {
+	h := testHandler(t)
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/ws", nil))
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("GET /ws without a token = %d, want 401", rec.Code)
 	}
 }
 
