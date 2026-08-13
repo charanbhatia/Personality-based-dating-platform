@@ -495,12 +495,12 @@ Implemented endpoints and their exact contracts are in
       concurrent mutual likes create exactly one match and one event
 - [x] Match list
 - [x] Profile photos gallery with URL safety rules
-- [ ] Profile photos integration with C URLs — blocked on C's media service;
-      `asset_ids` returns `501 media_unavailable` and relative `/media/...` paths
-      are already accepted
-- [ ] Trait Redis cache — blocked on C's Redis. The `cache.Cache` port is in
-      place with an in-process LRU behind it; swapping the implementation is a
-      one-line change in `internal/app`
+- [ ] Profile photos integration with C URLs — C's media service is on the
+      merge branch; PUT `/profile/photos` with `asset_ids` still returns
+      `501 media_unavailable` until `app.Options.Media` is wired to C's resolver
+- [ ] Trait Redis cache — C's Redis client exists. The `cache.Cache` port still
+      uses the in-process LRU; swapping in a Redis implementation is a one-line
+      change in `internal/app`
 - [x] Integration tests for match path
 
 ### M3
@@ -515,8 +515,9 @@ Implemented endpoints and their exact contracts are in
 ### M4
 
 - [ ] Load-test discover; document results
-- [ ] Cache hit metrics — needs C's metrics pipeline
-- [ ] Outbox reliability verified under worker restart
+- [ ] Cache hit metrics — C's `/metrics` exists; B's trait cache is not labelled yet
+- [ ] Outbox reliability verified under worker restart — outbox now publishes
+      to Redis Streams when `REDIS_URL` is set; not yet load-tested
 
 ### Verification status
 

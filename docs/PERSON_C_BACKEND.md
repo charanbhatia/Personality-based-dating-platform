@@ -11,6 +11,11 @@
 
 This document is your full playbook: current gaps (including known bugs), feature specs, realtime design, media pipeline, notification workers, and the scaling/runbook layer the whole team depends on.
 
+> **Status (merge branch `feat/b-c-merge`):** M1–M3 below are implemented. The
+> table in §2 is the original gap analysis, kept for context. The live env
+> surface is [`backend/env.example`](../backend/env.example). B's wire contract
+> is [PERSON_B_API.md](./PERSON_B_API.md).
+
 ---
 
 ## 2. Current baseline (your domain + infra)
@@ -26,16 +31,9 @@ This document is your full playbook: current gaps (including known bugs), featur
 | Observability | None | Structured logs, metrics, traces |
 | Middleware | CORS reflect-any Origin | Request ID, rate limit, hardened CORS, ready probe |
 
-### Known bug to fix first (messaging)
+**Now shipped (do not treat the table as current):** match-gated `/api/v1/conversations`, WebSocket at `GET /ws` with Redis fanout, media presign + thumbnail worker, notifications inbox + unread counters, Redis Streams queue + `cmd/worker`, Compose (Postgres/Redis/MinIO/Mailhog/api/worker), CI, `/healthz` `/readyz` `/metrics`, request ID + W3C trace context, rate limits. The `ListByUserID` double-bind bug is fixed and covered by `repository/conversation_test.go`.
 
-In [`backend/internal/repository/conversation.go`](../backend/internal/repository/conversation.go):
-
-```go
-// Query uses only $1, but passes userID twice — pgx may error at runtime
-rows, err := r.pool.Query(ctx, q, userID, userID)
-```
-
-Fix to a single `userID` argument (or rewrite query with two placeholders if intentional). Add a regression test.
+SQL for C domains is `009_c_messaging.sql`, `010_c_media.sql`, `011_c_notifications.sql` so it runs **after** B's `matches` table (`006_b_matching.sql`). Do not renumber back to `005_c`–`007_c`.
 
 ---
 
@@ -65,14 +63,14 @@ Extend env (maintain `backend/env.example`):
 
 | Variable | Purpose |
 |----------|---------|
+| `APP_ENV` (alias `ENV`) | development / production; B's production JWT/CORS guards |
 | `PORT` | HTTP listen |
 | `DATABASE_URL` | Postgres |
-| `REDIS_URL` | Redis |
-| `JWT_SECRET` | Shared with B |
-| `CORS_ORIGINS` | Comma-separated allowlist |
-| `S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET`, `S3_PUBLIC_BASE_URL` | Media |
+| `REDIS_URL` | Redis; empty disables rate limit, queues, WS fanout |
+| `JWT_SECRET` | Shared with B (`TokenManager`) |
+| `CORS_ALLOWED_ORIGINS` (alias `CORS_ORIGINS`) | Comma-separated allowlist |
+| `S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET`, `S3_PUBLIC_BASE_URL` | Media; empty → media endpoints 503 |
 | `WS_ALLOWED_ORIGINS` | WS check |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | Optional traces |
 | `SMTP_*` or `EMAIL_MODE=log` | Email stub |
 
 ### 4.2 Health & readiness (F23)
@@ -456,36 +454,36 @@ Publish a short `docs/RUNBOOK_LOADTEST.md` in M4 (you author).
 
 ### M1
 
-- [ ] `platform/` package: config, db pool, redis, middleware, logging
-- [ ] `/healthz`, `/readyz`
-- [ ] Docker Compose: Postgres, Redis, MinIO, api
-- [ ] Rate limit on auth routes
-- [ ] CORS allowlist config
-- [ ] `env.example` updated
-- [ ] Fix conversation `ListByUserID` bug + test
+- [x] `platform/` package: config, redis, middleware, logging, queue, metrics
+- [x] `/healthz`, `/readyz` (and `/health` kept for the current SPA)
+- [x] Docker Compose: Postgres, Redis, MinIO, Mailhog, api, worker
+- [x] Rate limit on auth routes (Redis; no-op without `REDIS_URL`; fail-closed on auth)
+- [x] CORS allowlist (`CORS_ALLOWED_ORIGINS` / `CORS_ORIGINS`)
+- [x] `env.example` updated — merged with B's auth/outbox knobs
+- [x] Fix conversation `ListByUserID` bug + test
 
 ### M2
 
-- [ ] Media presign + worker thumbnails + asset GET
-- [ ] Conversations match-gated + inbox DTOs with peer info
-- [ ] Messages cursor pagination + idempotent `client_msg_id`
-- [ ] CI pipeline green
-- [ ] Queue skeleton + worker binary boots
+- [x] Media presign + worker thumbnails + asset GET (`010_c_media.sql`)
+- [x] Conversations match-gated + inbox DTOs (`009_c_messaging.sql`)
+- [x] Messages cursor pagination + idempotent `client_msg_id`
+- [x] CI pipeline (`.github/workflows/ci.yml`)
+- [x] Queue skeleton + worker binary (`cmd/worker`)
 
 ### M3
 
-- [ ] WebSocket gateway + Redis fanout
-- [ ] Notifications API + consumers for match/message
-- [ ] Email stub for password reset
-- [ ] Prometheus metrics + basic OTel
-- [ ] Unread counters
+- [x] WebSocket gateway + Redis fanout (`GET /ws`)
+- [x] Notifications API + consumers for match/message (`011_c_notifications.sql`)
+- [x] Email stub for password reset (`EMAIL_MODE=log` or SMTP/Mailhog)
+- [x] Prometheus `/metrics` + W3C `traceparent` on requests (full OTLP exporter still M4)
+- [x] Unread counters
 
 ### M4
 
 - [ ] Two-replica WS demo documented
 - [ ] Load-test numbers published
 - [ ] Runbook: restart worker, rotate JWT secret procedure, disk/redis failure
-- [ ] DLQ / retry verified
+- [ ] DLQ / retry verified under worker restart (outbox → Redis Streams is wired; not load-tested)
 
 ---
 
@@ -528,6 +526,8 @@ Publish a short `docs/RUNBOOK_LOADTEST.md` in M4 (you author).
 
 - Shared roadmap: [00_SHARED_ROADMAP.md](./00_SHARED_ROADMAP.md)
 - B domain: [PERSON_B_BACKEND.md](./PERSON_B_BACKEND.md)
+- B API (implemented): [PERSON_B_API.md](./PERSON_B_API.md)
 - A consumer: [PERSON_A_FRONTEND.md](./PERSON_A_FRONTEND.md)
-- Bug locus: `backend/internal/repository/conversation.go`
-- Router today: `backend/internal/router/router.go`
+- Env: [`backend/env.example`](../backend/env.example)
+- Worker: `backend/cmd/worker/main.go`
+- Router: `backend/internal/router/router.go`

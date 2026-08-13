@@ -86,10 +86,19 @@ API runs at `http://localhost:8080`; `GET /health` needs no authentication.
 Every setting is documented in [backend/env.example](backend/env.example).
 
 Optional demo data — fully onboarded users with traits, preferences and photos,
-so the discovery feed is not empty:
+plus 10 pre-made matches and conversations:
 
 ```bash
 go run ./cmd/seed
+# password for every seeded account: password123
+# user1@example.com  ↔  user2@example.com   (already matched, has a chat)
+# user21@example.com+                       (discoverable, not pre-matched)
+```
+
+Person C's worker (optional; needs Redis):
+
+```bash
+go run ./cmd/worker
 ```
 
 ### Frontend
