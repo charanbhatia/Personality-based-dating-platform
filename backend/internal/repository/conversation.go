@@ -35,12 +35,12 @@ func (r *ConversationRepo) CreateOrGet(ctx context.Context, user1ID, user2ID uui
 
 func (r *ConversationRepo) ListByUserID(ctx context.Context, userID uuid.UUID) ([]models.Conversation, error) {
 	q := `SELECT id, user1_id, user2_id, created_at FROM conversations WHERE user1_id = $1 OR user2_id = $1 ORDER BY created_at DESC`
-	rows, err := r.pool.Query(ctx, q, userID, userID)
+	rows, err := r.pool.Query(ctx, q, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []models.Conversation
+	out := []models.Conversation{}
 	for rows.Next() {
 		var c models.Conversation
 		err := rows.Scan(&c.ID, &c.User1ID, &c.User2ID, &c.CreatedAt)
@@ -77,7 +77,7 @@ func (r *ConversationRepo) Messages(ctx context.Context, conversationID uuid.UUI
 		return nil, err
 	}
 	defer rows.Close()
-	var out []models.Message
+	out := []models.Message{}
 	for rows.Next() {
 		var m models.Message
 		err := rows.Scan(&m.ID, &m.ConversationID, &m.SenderID, &m.Content, &m.CreatedAt)
