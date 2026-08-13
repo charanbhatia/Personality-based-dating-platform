@@ -15,10 +15,14 @@ func testHandler(t *testing.T) http.Handler {
 	cfg := config.Load()
 	cfg.CORSOrigins = []string{"http://localhost:5173"}
 	cfg.RateLimitEnabled = false
-	return New(Deps{
+	h, err := New(Deps{
 		Config: cfg,
 		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
+	if err != nil {
+		t.Fatalf("build router: %v", err)
+	}
+	return h
 }
 
 func TestPreflightIsAnsweredWithoutRouteMatch(t *testing.T) {

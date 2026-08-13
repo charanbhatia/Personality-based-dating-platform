@@ -68,6 +68,7 @@ services:
       - |
         mc alias set local http://minio:9000 "$$S3_ACCESS_KEY" "$$S3_SECRET_KEY"
         mc mb --ignore-existing "local/$$S3_BUCKET"
+        mc anonymous set download "local/$$S3_BUCKET/public"
 
   api:
     build:
@@ -88,6 +89,11 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3000}
       MATCH_GATE_ENABLED: ${MATCH_GATE_ENABLED:-true}
+      S3_ENDPOINT: http://minio:9000
+      S3_PUBLIC_BASE_URL: ${S3_PUBLIC_BASE_URL:-http://localhost:9000}
+      S3_BUCKET: ${S3_BUCKET:-dating-media}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-minioadmin}
     ports:
       - "${API_HOST_PORT:-8080}:8080"
     healthcheck:
@@ -112,6 +118,11 @@ services:
       REDIS_URL: redis://redis:6379/0
       LOG_LEVEL: ${LOG_LEVEL:-info}
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-4}
+      S3_ENDPOINT: http://minio:9000
+      S3_PUBLIC_BASE_URL: ${S3_PUBLIC_BASE_URL:-http://localhost:9000}
+      S3_BUCKET: ${S3_BUCKET:-dating-media}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-minioadmin}
     restart: unless-stopped
 
 volumes:
