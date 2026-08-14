@@ -42,6 +42,9 @@ func TestRegisterCreatesAUsableAccount(t *testing.T) {
 	if result.SessionID == uuid.Nil {
 		t.Error("session_id is nil; the refresh token is not bound to a session")
 	}
+	if result.User.EmailVerified {
+		t.Error("a new account must start unverified")
+	}
 
 	// Registration must also create the dependent rows the other domains read.
 	if got := countRows(t, `SELECT count(*) FROM profiles WHERE user_id = $1`, result.User.ID); got != 1 {
@@ -535,4 +538,91 @@ func TestPasswordResetEventDoesNotCarryTheHash(t *testing.T) {
 	if strings.Contains(payload, "password_hash") || strings.Contains(payload, "token_hash") {
 		t.Errorf("the event carries stored credential material: %s", payload)
 	}
+}
+
+func TestEmailVerificationFlow(t *testing.T) {
+	resetDB(t)
+	u := register(t, "Verify", "1990-01-01")
+
+	if got := countRows(t, `SELECT count(*) FROM email_verification_tokens WHERE user_id = $1`, u.ID); got != 1 {
+		t.Fatalf("issued %d verification tokens, want 1", got)
+	}
+	if got := countRows(t, `
+		SELECT count(*) FROM outbox_events
+		WHERE event_type = 'auth.email_verification_requested'
+		  AND payload->>'user_id' = $1`, u.ID.String()); got != 1 {
+		t.Fatalf("outbox verification events = %d, want 1", got)
+	}
+
+	token := verifyTokenFromOutbox(t, u.ID)
+
+	// Login is not gated on verification.
+	login(t, u.Email, defaultPassword)
+
+	do(t, http.MethodPost, "/api/v1/auth/email/verify", "", map[string]any{"token": "bogus"}).
+		requireError(t, http.StatusBadRequest, "verify_token_invalid")
+
+	do(t, http.MethodPost, "/api/v1/auth/email/verify", "", map[string]any{"token": token}).
+		requireStatus(t, http.StatusNoContent)
+
+	var me struct {
+		User struct {
+			EmailVerified bool `json:"email_verified"`
+		} `json:"user"`
+	}
+	do(t, http.MethodGet, "/api/v1/auth/me", u.Token, nil).
+		requireStatus(t, http.StatusOK).decode(t, &me)
+	if !me.User.EmailVerified {
+		t.Fatal("GET /auth/me still reports email_verified=false after a successful verify")
+	}
+
+	do(t, http.MethodPost, "/api/v1/auth/email/verify", "", map[string]any{"token": token}).
+		requireError(t, http.StatusBadRequest, "verify_token_invalid")
+
+	do(t, http.MethodPost, "/api/v1/auth/email/resend", u.Token, nil).
+		requireStatus(t, http.StatusAccepted)
+	if got := countRows(t, `
+		SELECT count(*) FROM outbox_events
+		WHERE event_type = 'auth.email_verification_requested'
+		  AND payload->>'user_id' = $1`, u.ID.String()); got != 1 {
+		t.Fatalf("resend after verify issued another event (%d), want the original 1", got)
+	}
+}
+
+func TestEmailVerificationResendReplacesTheOutstandingToken(t *testing.T) {
+	resetDB(t)
+	u := register(t, "Resend", "1990-01-01")
+	first := verifyTokenFromOutbox(t, u.ID)
+
+	do(t, http.MethodPost, "/api/v1/auth/email/resend", u.Token, nil).
+		requireStatus(t, http.StatusAccepted)
+
+	second := verifyTokenFromOutbox(t, u.ID)
+	if second == first {
+		t.Fatal("resend reused the previous plaintext token")
+	}
+
+	do(t, http.MethodPost, "/api/v1/auth/email/verify", "", map[string]any{"token": first}).
+		requireError(t, http.StatusBadRequest, "verify_token_invalid")
+	do(t, http.MethodPost, "/api/v1/auth/email/verify", "", map[string]any{"token": second}).
+		requireStatus(t, http.StatusNoContent)
+}
+
+func verifyTokenFromOutbox(t *testing.T, userID uuid.UUID) string {
+	t.Helper()
+	var token string
+	err := testPool.QueryRow(context.Background(), `
+		SELECT payload->>'verify_token'
+		FROM outbox_events
+		WHERE event_type = 'auth.email_verification_requested'
+		  AND payload->>'user_id' = $1::text
+		ORDER BY created_at DESC
+		LIMIT 1`, userID.String()).Scan(&token)
+	if err != nil {
+		t.Fatalf("read verification token from the outbox: %v", err)
+	}
+	if token == "" {
+		t.Fatal("the outbox event carries no verify token")
+	}
+	return token
 }

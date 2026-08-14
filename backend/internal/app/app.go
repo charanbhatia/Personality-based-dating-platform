@@ -17,8 +17,10 @@ import (
 	"github.com/bits-assignment/dating-platform/backend/internal/cache"
 	"github.com/bits-assignment/dating-platform/backend/internal/config"
 	"github.com/bits-assignment/dating-platform/backend/internal/matching"
+	"github.com/bits-assignment/dating-platform/backend/internal/media"
 	"github.com/bits-assignment/dating-platform/backend/internal/outbox"
 	"github.com/bits-assignment/dating-platform/backend/internal/personality"
+	"github.com/bits-assignment/dating-platform/backend/internal/platform/queue"
 	"github.com/bits-assignment/dating-platform/backend/internal/preferences"
 	"github.com/bits-assignment/dating-platform/backend/internal/profile"
 	"github.com/bits-assignment/dating-platform/backend/internal/repository"
@@ -36,11 +38,11 @@ type Options struct {
 	// Publisher delivers outbox events. Defaults to structured logging until the
 	// Redis Streams publisher exists.
 	Publisher outbox.Publisher
-	// TraitCache caches Big Five vectors. Defaults to an in-process TTL cache;
-	// swap in a Redis-backed implementation once available.
+	// TraitCache caches Big Five vectors. Defaults to Redis when a client is
+	// supplied, otherwise an in-process TTL cache.
 	TraitCache cache.Cache
-	// Media resolves upload asset ids to URLs. Nil means PUT /profile/photos
-	// accepts URLs only.
+	// Media resolves upload asset ids to URLs. Nil means the app constructs
+	// Person C's media service and wires it here.
 	Media profile.MediaResolver
 	// Redis is optional. When set, the router enables rate limits, queues and WS fanout.
 	Redis *goredis.Client
@@ -88,17 +90,41 @@ func New(cfg *config.Config, pool *pgxpool.Pool, opts Options) (*App, error) {
 	traitCache := opts.TraitCache
 	var memoryCache *cache.Memory
 	if traitCache == nil {
-		memoryCache = cache.NewMemory(0)
-		traitCache = memoryCache
+		if opts.Redis != nil {
+			traitCache = cache.NewRedis(opts.Redis)
+		} else {
+			memoryCache = cache.NewMemory(0)
+			traitCache = memoryCache
+		}
+	}
+
+	log := opts.Logger
+	if log == nil {
+		log = slog.Default()
+	}
+
+	var mediaPub media.Publisher
+	if opts.Redis != nil {
+		mediaPub = queue.New(opts.Redis, log, cfg.QueueMaxLen)
+	}
+	mediaSvc, err := media.NewServiceFromConfig(pool, cfg, mediaPub, log)
+	if err != nil {
+		return nil, fmt.Errorf("media: %w", err)
+	}
+
+	mediaResolver := opts.Media
+	if mediaResolver == nil {
+		mediaResolver = mediaURLResolver{svc: mediaSvc}
 	}
 
 	authService, err := auth.NewService(auth.ServiceConfig{
-		Pool:             pool,
-		Tokens:           tokens,
-		RefreshTTL:       cfg.RefreshTokenTTL,
-		PasswordResetTTL: cfg.PasswordResetTTL,
-		Kicker:           drainer,
-		Now:              opts.Now,
+		Pool:                 pool,
+		Tokens:               tokens,
+		RefreshTTL:           cfg.RefreshTokenTTL,
+		PasswordResetTTL:     cfg.PasswordResetTTL,
+		EmailVerificationTTL: cfg.EmailVerificationTTL,
+		Kicker:               drainer,
+		Now:                  opts.Now,
 	})
 	if err != nil {
 		return nil, err
@@ -106,7 +132,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, opts Options) (*App, error) {
 
 	profileService, err := profile.NewService(profile.ServiceConfig{
 		Pool:  pool,
-		Media: opts.Media,
+		Media: mediaResolver,
 		Now:   opts.Now,
 	})
 	if err != nil {
@@ -152,6 +178,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, opts Options) (*App, error) {
 		Preferences: preferencesService,
 		Matching:    matchingService,
 		ProfileRepo: repository.NewProfileRepo(pool),
+		Media:       mediaSvc,
 		Redis:       opts.Redis,
 		Logger:      opts.Logger,
 	})

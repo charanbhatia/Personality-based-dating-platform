@@ -41,10 +41,10 @@ import (
 
 // Deps are the collaborators the router needs. Assembled by internal/app.
 type Deps struct {
-	Config *config.Config
-	Pool   *pgxpool.Pool
-	Tokens *auth.TokenManager
-	Auth   *auth.Service
+	Config      *config.Config
+	Pool        *pgxpool.Pool
+	Tokens      *auth.TokenManager
+	Auth        *auth.Service
 	Profile     *profile.Service
 	Personality *personality.Service
 	Preferences *preferences.Service
@@ -55,6 +55,8 @@ type Deps struct {
 	// Messaging is the pre-v1 conversation handler. Nil falls back to wiring
 	// Person C's ConversationRepo when a pool is available.
 	Messaging *handlers.MessagingHandler
+	// Media is the upload service. Nil constructs one from Config.
+	Media *media.Service
 
 	Redis   *goredis.Client
 	Logger  *slog.Logger
@@ -143,7 +145,7 @@ func New(deps Deps) (http.Handler, error) {
 	v1.NotFoundHandler = fallback
 	v1.MethodNotAllowedHandler = fallback
 	v1.Use(globalRateLimit)
-	registerV1(v1, deps, requireAuth)
+	registerV1(v1, deps, requireAuth, authRateLimit)
 
 	v1Protected := v1.PathPrefix("").Subrouter()
 	v1Protected.Use(requireAuth)
@@ -205,9 +207,13 @@ func New(deps Deps) (http.Handler, error) {
 		}),
 	).RegisterRoutes(v1Protected)
 
-	mediaSvc, err := media.NewServiceFromConfig(pool, cfg, mediaPub, log)
-	if err != nil {
-		return nil, err
+	mediaSvc := deps.Media
+	if mediaSvc == nil {
+		svc, err := media.NewServiceFromConfig(pool, cfg, mediaPub, log)
+		if err != nil {
+			return nil, err
+		}
+		mediaSvc = svc
 	}
 	media.NewHandler(mediaSvc, log, platformmw.RateLimit(platformmw.RateLimitConfig{
 		Limiter:     limiter,
@@ -238,8 +244,8 @@ func New(deps Deps) (http.Handler, error) {
 	return handler, nil
 }
 
-func registerV1(api *mux.Router, deps Deps, requireAuth func(http.Handler) http.Handler) {
-	auth.NewHandler(deps.Auth).RegisterRoutes(api, requireAuth)
+func registerV1(api *mux.Router, deps Deps, requireAuth, authRateLimit func(http.Handler) http.Handler) {
+	auth.NewHandler(deps.Auth).RegisterRoutes(api, requireAuth, authRateLimit)
 	profile.NewHandler(deps.Profile).RegisterRoutes(api, requireAuth)
 	personality.NewHandler(deps.Personality).RegisterRoutes(api, requireAuth)
 	preferences.NewHandler(deps.Preferences).RegisterRoutes(api, requireAuth)

@@ -26,11 +26,12 @@ type Config struct {
 	LogFormat   string
 
 	// Auth
-	JWTSecret        string
-	JWTIssuer        string
-	AccessTokenTTL   time.Duration
-	RefreshTokenTTL  time.Duration
-	PasswordResetTTL time.Duration
+	JWTSecret            string
+	JWTIssuer            string
+	AccessTokenTTL       time.Duration
+	RefreshTokenTTL      time.Duration
+	PasswordResetTTL     time.Duration
+	EmailVerificationTTL time.Duration
 
 	// Personality
 	AssessmentRetakeInterval time.Duration
@@ -169,6 +170,8 @@ func Load() (*Config, error) {
 	collect(err)
 	c.PasswordResetTTL, err = getDuration("PASSWORD_RESET_TTL", time.Hour)
 	collect(err)
+	c.EmailVerificationTTL, err = getDuration("EMAIL_VERIFICATION_TTL", 24*time.Hour)
+	collect(err)
 	c.AssessmentRetakeInterval, err = getDuration("ASSESSMENT_RETAKE_INTERVAL", 30*24*time.Hour)
 	collect(err)
 	c.TraitCacheTTL, err = getDuration("TRAIT_CACHE_TTL", time.Minute)
@@ -263,6 +266,12 @@ func (c *Config) validate() error {
 		if len(c.CORSAllowedOrigins) == 0 && len(c.CORSOrigins) == 0 {
 			errs = append(errs, fmt.Errorf("CORS_ALLOWED_ORIGINS must be set when APP_ENV=%s", c.Env))
 		}
+		for _, origin := range append(append([]string{}, c.CORSAllowedOrigins...), c.CORSOrigins...) {
+			if origin == "*" {
+				errs = append(errs, fmt.Errorf("CORS_ALLOWED_ORIGINS must not include * when APP_ENV=%s", c.Env))
+				break
+			}
+		}
 	}
 	if c.AccessTokenTTL <= 0 {
 		errs = append(errs, errors.New("ACCESS_TOKEN_TTL must be positive"))
@@ -272,6 +281,9 @@ func (c *Config) validate() error {
 	}
 	if c.PasswordResetTTL <= 0 {
 		errs = append(errs, errors.New("PASSWORD_RESET_TTL must be positive"))
+	}
+	if c.EmailVerificationTTL <= 0 {
+		errs = append(errs, errors.New("EMAIL_VERIFICATION_TTL must be positive"))
 	}
 	if c.AssessmentRetakeInterval < 0 {
 		errs = append(errs, errors.New("ASSESSMENT_RETAKE_INTERVAL must not be negative"))

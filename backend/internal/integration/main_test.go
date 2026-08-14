@@ -88,6 +88,7 @@ func testConfig(dsn string) *config.Config {
 		AccessTokenTTL:           15 * time.Minute,
 		RefreshTokenTTL:          30 * 24 * time.Hour,
 		PasswordResetTTL:         time.Hour,
+		EmailVerificationTTL:     24 * time.Hour,
 		AssessmentRetakeInterval: testRetakeInterval,
 		DiscoverDefaultLimit:     20,
 		DiscoverMaxLimit:         50,

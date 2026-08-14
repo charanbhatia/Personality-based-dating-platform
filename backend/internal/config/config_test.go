@@ -15,6 +15,7 @@ func setEnv(t *testing.T, vars map[string]string) {
 	known := []string{
 		"APP_ENV", "PORT", "DATABASE_URL", "JWT_SECRET", "JWT_ISSUER",
 		"ACCESS_TOKEN_TTL", "REFRESH_TOKEN_TTL", "PASSWORD_RESET_TTL",
+		"EMAIL_VERIFICATION_TTL",
 		"ASSESSMENT_RETAKE_INTERVAL", "DISCOVER_DEFAULT_LIMIT", "DISCOVER_MAX_LIMIT",
 		"TRAIT_CACHE_TTL", "OUTBOX_BATCH_SIZE", "OUTBOX_POLL_INTERVAL",
 		"OUTBOX_MAX_ATTEMPTS", "CORS_ALLOWED_ORIGINS", "READ_HEADER_TIMEOUT",
@@ -145,6 +146,8 @@ func TestLoadRejectsUnsafeProduction(t *testing.T) {
 			[]string{"JWT_SECRET"}, with(map[string]string{"JWT_SECRET": strings.Repeat("s", MinJWTSecretLen-1)})},
 		"reflected CORS": {
 			[]string{"CORS_ALLOWED_ORIGINS"}, with(map[string]string{"CORS_ALLOWED_ORIGINS": ""})},
+		"wildcard CORS": {
+			[]string{"CORS_ALLOWED_ORIGINS"}, with(map[string]string{"CORS_ALLOWED_ORIGINS": "*"})},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
