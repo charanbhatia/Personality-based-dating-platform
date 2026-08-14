@@ -15,7 +15,7 @@ import (
 var ErrNotFound = errors.New("profile not found")
 
 const selectColumns = `
-	p.id, p.user_id, p.bio, p.gender, p.location, p.interests, p.photo_urls,
+	p.id, p.user_id, p.bio, p.gender, p.location, p.lat, p.lng, p.interests, p.photo_urls,
 	coalesce(p.primary_photo_url, ''), p.created_at, p.updated_at,
 	u.name, u.date_of_birth`
 
@@ -25,7 +25,7 @@ type Repo struct{}
 func scan(row interface{ Scan(dest ...any) error }) (*Profile, error) {
 	p := &Profile{}
 	var photoURLs []byte
-	err := row.Scan(&p.ID, &p.UserID, &p.Bio, &p.Gender, &p.Location, &p.Interests, &photoURLs,
+	err := row.Scan(&p.ID, &p.UserID, &p.Bio, &p.Gender, &p.Location, &p.Lat, &p.Lng, &p.Interests, &photoURLs,
 		&p.PrimaryPhotoURL, &p.CreatedAt, &p.UpdatedAt, &p.Name, &p.DateOfBirth)
 	if err != nil {
 		if db.IsNoRows(err) {
@@ -79,6 +79,8 @@ type UpdateFields struct {
 	Bio       *string
 	Gender    *string
 	Location  *string
+	Lat       *float64
+	Lng       *float64
 	Interests *[]string
 }
 
@@ -90,11 +92,13 @@ func (r Repo) Update(ctx context.Context, q db.Querier, userID uuid.UUID, fields
 		    gender     = coalesce($3, p.gender),
 		    location   = coalesce($4, p.location),
 		    interests  = coalesce($5::text[], p.interests),
+		    lat        = coalesce($6, p.lat),
+		    lng        = coalesce($7, p.lng),
 		    updated_at = now()
 		FROM users u
 		WHERE p.user_id = $1 AND u.id = p.user_id
 		RETURNING `+selectColumns,
-		userID, fields.Bio, fields.Gender, fields.Location, arrayParam(fields.Interests))
+		userID, fields.Bio, fields.Gender, fields.Location, arrayParam(fields.Interests), fields.Lat, fields.Lng)
 	return scan(row)
 }
 
@@ -182,7 +186,7 @@ func (Repo) GetPublic(ctx context.Context, q db.Querier, viewerID, targetID uuid
 		FROM profiles p
 		JOIN users u ON u.id = p.user_id
 		WHERE p.user_id = $2::uuid`, viewerID, targetID,
-	).Scan(&p.ID, &p.UserID, &p.Bio, &p.Gender, &p.Location, &p.Interests, &photoURLs,
+	).Scan(&p.ID, &p.UserID, &p.Bio, &p.Gender, &p.Location, &p.Lat, &p.Lng, &p.Interests, &photoURLs,
 		&p.PrimaryPhotoURL, &p.CreatedAt, &p.UpdatedAt, &p.Name, &p.DateOfBirth,
 		&view.IsMatched, &view.IsBlocked)
 	if err != nil {

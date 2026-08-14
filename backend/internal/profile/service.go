@@ -76,6 +76,8 @@ type UpdateInput struct {
 	Bio         *string
 	Gender      *string
 	Location    *string
+	Lat         *float64
+	Lng         *float64
 	Interests   *[]string
 	DateOfBirth *string
 }
@@ -110,6 +112,18 @@ func (s *Service) Update(ctx context.Context, userID uuid.UUID, in UpdateInput) 
 			v.Add("location", fmt.Sprintf("must not exceed %d characters", MaxLocationRunes))
 		}
 		fields.Location = &location
+	}
+	if in.Lat != nil || in.Lng != nil {
+		if in.Lat == nil || in.Lng == nil {
+			v.Add("lat", "lat and lng must be sent together")
+		} else if *in.Lat < -90 || *in.Lat > 90 {
+			v.Add("lat", "must be within [-90, 90]")
+		} else if *in.Lng < -180 || *in.Lng > 180 {
+			v.Add("lng", "must be within [-180, 180]")
+		} else {
+			fields.Lat = in.Lat
+			fields.Lng = in.Lng
+		}
 	}
 	if in.Interests != nil {
 		interests, err := NormalizeInterests(*in.Interests)
@@ -288,6 +302,8 @@ func (s *Service) toDTO(p *Profile) *DTO {
 		Bio:             p.Bio,
 		Gender:          p.Gender,
 		Location:        p.Location,
+		Lat:             p.Lat,
+		Lng:             p.Lng,
 		Interests:       nonNil(p.Interests),
 		PhotoURLs:       nonNil(p.PhotoURLs),
 		PrimaryPhotoURL: p.PrimaryPhotoURL,

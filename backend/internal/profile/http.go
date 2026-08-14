@@ -49,6 +49,8 @@ type updateRequest struct {
 	Bio         *string   `json:"bio"`
 	Gender      *string   `json:"gender"`
 	Location    *string   `json:"location"`
+	Lat         *float64  `json:"lat"`
+	Lng         *float64  `json:"lng"`
 	Interests   *[]string `json:"interests"`
 	DateOfBirth *string   `json:"date_of_birth"`
 }
@@ -66,6 +68,8 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) error {
 		Bio:         req.Bio,
 		Gender:      req.Gender,
 		Location:    req.Location,
+		Lat:         req.Lat,
+		Lng:         req.Lng,
 		Interests:   req.Interests,
 		DateOfBirth: req.DateOfBirth,
 	})

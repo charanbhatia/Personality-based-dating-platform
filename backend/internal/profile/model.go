@@ -25,6 +25,8 @@ type Profile struct {
 	Bio             string
 	Gender          string
 	Location        string
+	Lat             *float64
+	Lng             *float64
 	Interests       []string
 	PhotoURLs       []string
 	PrimaryPhotoURL string
@@ -43,6 +45,8 @@ type DTO struct {
 	Bio             string    `json:"bio"`
 	Gender          string    `json:"gender"`
 	Location        string    `json:"location"`
+	Lat             *float64  `json:"lat,omitempty"`
+	Lng             *float64  `json:"lng,omitempty"`
 	Interests       []string  `json:"interests"`
 	PhotoURLs       []string  `json:"photo_urls"`
 	PrimaryPhotoURL string    `json:"primary_photo_url"`
