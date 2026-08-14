@@ -8,12 +8,18 @@ const TITLES = [
   [/^\/$/, null], // landing page keeps the full brand line
   [/^\/login$/, 'Log in'],
   [/^\/register$/, 'Create your account'],
+  [/^\/forgot-password$/, 'Forgot password'],
+  [/^\/reset-password$/, 'Reset password'],
+  [/^\/verify-email$/, 'Verify email'],
+  [/^\/onboarding/, 'Get started'],
   [/^\/app\/?$/, 'Home'],
   [/^\/app\/profile$/, 'Your profile'],
   [/^\/app\/matches$/, 'Your matches'],
   [/^\/app\/matches\/.+/, 'Match profile'],
   [/^\/app\/conversations$/, 'Messages'],
   [/^\/app\/conversations\/.+/, 'Chat'],
+  [/^\/app\/notifications$/, 'Notifications'],
+  [/^\/app\/settings$/, 'Settings'],
 ];
 
 const FALLBACK = 'Kindred · Meet minds, not just faces';

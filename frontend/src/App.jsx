@@ -9,11 +9,17 @@ import {
   Link,
   NavLink,
 } from 'react-router-dom';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from './api';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ToastProvider } from './context/ToastContext';
 import Brand from './components/Brand';
 import Loading from './components/Loading';
 import ErrorBoundary from './components/ErrorBoundary';
+import NotificationBell from './components/NotificationBell';
+import OfflineBanner from './components/OfflineBanner';
 import useRouteMeta from './hooks/useRouteMeta';
+import { needsOnboarding, nextOnboardingPath, afterAuthPath } from './lib/onboarding';
 import {
   IconUser,
   IconCompass,
@@ -21,24 +27,34 @@ import {
   IconChat,
   IconLogout,
   IconArrowLeft,
+  IconCog,
 } from './components/Icons';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import './App.css';
 
-// Landing and Login are the first-paint entry points, so they stay eager.
-// Everything else is only reachable by navigation and arrives on demand.
 const Register = lazy(() => import('./pages/Register'));
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
+const ResetPassword = lazy(() => import('./pages/ResetPassword'));
+const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
 const Profile = lazy(() => import('./pages/Profile'));
 const Matches = lazy(() => import('./pages/Matches'));
 const MatchDetail = lazy(() => import('./pages/MatchDetail'));
 const Conversations = lazy(() => import('./pages/Conversations'));
 const Chat = lazy(() => import('./pages/Chat'));
 const StartConversation = lazy(() => import('./pages/StartConversation'));
+const Notifications = lazy(() => import('./pages/Notifications'));
+const Settings = lazy(() => import('./pages/Settings'));
+const OnboardingLayout = lazy(() => import('./pages/onboarding/OnboardingLayout'));
+const OnboardingIndex = lazy(() =>
+  import('./pages/onboarding/OnboardingLayout').then((m) => ({ default: m.OnboardingIndex }))
+);
+const Quiz = lazy(() => import('./pages/onboarding/Quiz'));
+const Preferences = lazy(() => import('./pages/onboarding/Preferences'));
+const ProfileSetup = lazy(() => import('./pages/onboarding/ProfileSetup'));
+const Photos = lazy(() => import('./pages/onboarding/Photos'));
 
-// The app moved under /app so that / can be a public page. Old links, bookmarks
-// and anything already shared keep working.
 const LEGACY = [
   ['/profile', '/app/profile'],
   ['/matches', '/app/matches'],
@@ -56,12 +72,13 @@ function LegacyRedirect() {
 function PublicOnly({ children }) {
   const { user, loading } = useAuth();
   if (loading) return <Loading text="Getting things ready…" />;
-  if (user) return <Navigate to="/app" replace />;
+  if (user) return <Navigate to={afterAuthPath(user)} replace />;
   return children;
 }
 
 function ProtectedLayout() {
   const { user, loading } = useAuth();
+  const location = useLocation();
   if (loading)
     return (
       <div className="app-shell">
@@ -69,10 +86,12 @@ function ProtectedLayout() {
       </div>
     );
   if (!user) return <Navigate to="/login" replace />;
+  if (needsOnboarding(user) && !location.pathname.startsWith('/onboarding')) {
+    return <Navigate to={nextOnboardingPath(user)} replace />;
+  }
   return <Layout />;
 }
 
-// Only the nested screens get a back bar; the top-level ones have the nav.
 function backTarget(pathname) {
   if (pathname.startsWith('/app/conversations/'))
     return { to: '/app/conversations', label: 'Back to messages' };
@@ -87,14 +106,14 @@ function Layout() {
   const mainRef = useRef(null);
   const back = backTarget(location.pathname);
 
-  // A client-side navigation leaves focus wherever it was, so keyboard and
-  // screen-reader users stay stranded in the old page's tab order.
   useEffect(() => {
     mainRef.current?.focus();
   }, [location.pathname]);
 
   return (
     <div className="app-shell">
+      <a className="skip-link" href="#main-content">Skip to content</a>
+      <OfflineBanner />
       <header className="app-header">
         <Brand to="/app" />
         <nav className="header-nav">
@@ -118,6 +137,10 @@ function Layout() {
         <div className="header-right">
           {user && (
             <>
+              <NotificationBell />
+              <NavLink to="/app/settings" className="nav-item" aria-label="Settings">
+                <IconCog />
+              </NavLink>
               <span className="user-chip">
                 <span className="user-name">{user.name || user.email}</span>
               </span>
@@ -134,7 +157,7 @@ function Layout() {
           )}
         </div>
       </header>
-      <main className="app-main" ref={mainRef} tabIndex={-1}>
+      <main id="main-content" className="app-main" ref={mainRef} tabIndex={-1}>
         {back && (
           <div className="back-bar">
             <Link to={back.to} className="btn-back">
@@ -156,9 +179,6 @@ function Layout() {
 
 function AppRoutes() {
   useRouteMeta();
-  // The boundary sits above this Suspense too: /register is the one lazy route
-  // outside Layout, and a failed chunk fetch there would otherwise white-screen
-  // the whole app.
   return (
     <ErrorBoundary>
       <Suspense fallback={<Loading text="Getting things ready…" />}>
@@ -166,6 +186,17 @@ function AppRoutes() {
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<PublicOnly><Login /></PublicOnly>} />
           <Route path="/register" element={<PublicOnly><Register /></PublicOnly>} />
+          <Route path="/forgot-password" element={<PublicOnly><ForgotPassword /></PublicOnly>} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
+
+          <Route path="/onboarding" element={<OnboardingLayout />}>
+            <Route index element={<OnboardingIndex />} />
+            <Route path="quiz" element={<Quiz />} />
+            <Route path="preferences" element={<Preferences />} />
+            <Route path="profile" element={<ProfileSetup />} />
+            <Route path="photos" element={<Photos />} />
+          </Route>
 
           <Route path="/app" element={<ProtectedLayout />}>
             <Route index element={<Dashboard />} />
@@ -175,6 +206,8 @@ function AppRoutes() {
             <Route path="conversations" element={<Conversations />} />
             <Route path="conversations/start/:userId" element={<StartConversation />} />
             <Route path="conversations/:id" element={<Chat />} />
+            <Route path="notifications" element={<Notifications />} />
+            <Route path="settings" element={<Settings />} />
           </Route>
 
           {LEGACY.map(([from]) => (
@@ -190,10 +223,14 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <AppRoutes />
-      </AuthProvider>
-    </BrowserRouter>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <AuthProvider>
+          <ToastProvider>
+            <AppRoutes />
+          </ToastProvider>
+        </AuthProvider>
+      </BrowserRouter>
+    </QueryClientProvider>
   );
 }
