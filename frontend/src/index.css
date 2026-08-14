@@ -11,6 +11,46 @@
    nothing here is under 4.5:1 for text.
    ============================================================ */
 
+/* Self-hosted. The Google Fonts stylesheet was a 932ms render block on a
+   cross-origin round trip, and Bricolage's variable optical-size axis shipped
+   75KB — pinned to one optical size it is 22KB. Also removes a third-party
+   request from every page load, which a dating app should not be making. */
+@font-face {
+  font-family: 'Bricolage Grotesque';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/bricolage-700.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/jakarta-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/jakarta-500.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/jakarta-600.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/jakarta-700.woff2') format('woff2');
+}
+
 *,
 *::before,
 *::after {

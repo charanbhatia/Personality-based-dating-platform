@@ -136,7 +136,7 @@
 .app-main {
   flex: 1;
   width: 100%;
-  max-width: 940px;
+  max-width: 1140px;
   margin: 0 auto;
   padding: 2.2rem 1.6rem 4rem;
 }
@@ -438,6 +438,7 @@
 
 /* ---------- dashboard ---------- */
 .dash-hero {
+  max-width: 62ch;
   padding-bottom: 2rem;
   margin-bottom: 2rem;
   border-bottom: 1px solid var(--rule);
@@ -558,7 +559,7 @@
 /* ---------- matches ---------- */
 .match-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(244px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(238px, 1fr));
   gap: 1.25rem;
 }
 .match-card {
@@ -743,6 +744,7 @@
 
 /* ---------- conversations ---------- */
 .conv-list {
+  max-width: 760px;
   list-style: none;
   margin: 0;
   padding: 0;
@@ -799,6 +801,8 @@
 
 /* ---------- chat ---------- */
 .chat-page {
+  max-width: 760px;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
   height: calc(100vh - 230px);
