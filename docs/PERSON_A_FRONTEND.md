@@ -98,18 +98,18 @@ Keep old routes as redirects during migration so demos do not break.
 
 **Client behavior**
 
-1. Store `access_token` (memory preferred) + `refresh_token` (`httpOnly` cookie if C/B enable it; otherwise secure `localStorage` with clear docs — prefer cookie when B ships it).
+1. Store `access_token` in memory. Refresh lives in an `httpOnly` `refresh_token` cookie (`Path=/`, `SameSite=Lax`, `Secure` in production). Axios uses `withCredentials: true`. A leftover `localStorage` refresh token is still sent on refresh as a fallback.
 2. Axios (or fetch wrapper) attaches access token.
-3. On `401`, attempt **one** refresh via `POST /api/v1/auth/refresh`; retry original request; if refresh fails, clear session → `/login`.
-4. Logout calls `POST /api/v1/auth/logout` then clears client state.
+3. On `401`, attempt **one** refresh via `POST /api/v1/auth/refresh` (empty body + cookie); retry original request; if refresh fails, clear session → `/login`.
+4. Logout calls `POST /api/v1/auth/logout` then clears client state (and unregisters the web device token).
 
 **States:** loading, validation errors, network error, success redirect to onboarding or `/app`.
 
 **Acceptance**
 
-- [ ] Expired access token silently refreshes without kicking user mid-form
-- [ ] Logout invalidates refresh (no silent re-login)
-- [ ] Protected routes use a single `ProtectedRoute` + onboarding gate
+- [x] Expired access token silently refreshes without kicking user mid-form
+- [x] Logout invalidates refresh (no silent re-login)
+- [x] Protected routes use a single `ProtectedRoute` + onboarding gate
 
 ---
 
@@ -141,9 +141,9 @@ Keep old routes as redirects during migration so demos do not break.
 
 **Acceptance**
 
-- [ ] User cannot reach Discover until quiz + preferences + profile minimum fields complete (photos can be soft-required: at least one)
-- [ ] Upload shows progress and failure retry
-- [ ] Trait results render from server scores, not client-invented math
+- [x] User cannot reach Discover until quiz + preferences + profile minimum fields complete (photos can be soft-required: at least one)
+- [x] Upload shows progress and failure retry
+- [x] Trait results render from server scores, not client-invented math
 
 ---
 
@@ -170,10 +170,10 @@ Keep old routes as redirects during migration so demos do not break.
 
 **Acceptance**
 
-- [ ] Feed is ordered by server score (do not re-sort client-side except sticky UX)
-- [ ] Like/pass are idempotent from UI (disable double-tap)
-- [ ] Mutual match celebration modal when like response `matched: true`
-- [ ] No email displayed for other users
+- [x] Feed is ordered by server score (do not re-sort client-side except sticky UX)
+- [x] Like/pass are idempotent from UI (disable double-tap)
+- [x] Mutual match celebration modal when like response `matched: true`
+- [x] No email displayed for other users
 
 ---
 
@@ -199,9 +199,9 @@ Keep old routes as redirects during migration so demos do not break.
 
 **Acceptance**
 
-- [ ] New messages appear without full page refresh when WS connected
-- [ ] History pagination upward scroll works
-- [ ] Unmatched conversation attempt shows clear error from API
+- [x] New messages appear without full page refresh when WS connected
+- [x] History pagination upward scroll works
+- [x] Unmatched conversation attempt shows clear error from API
 
 ---
 
@@ -211,12 +211,12 @@ Keep old routes as redirects during migration so demos do not break.
 - Inbox list: `GET /api/v1/notifications`
 - Mark read: `POST /api/v1/notifications/:id/read` or mark-all
 - Click → deep link to match or conversation
-- Optional: request browser Notification permission; show when tab hidden (token from C push stub later)
+- Optional: request browser Notification permission; show when tab hidden. Register `POST /api/v1/devices` so C can deliver FCM/APNs when keys are configured.
 
 **Acceptance**
 
-- [ ] Match and message events produce inbox rows within a few seconds of backend processing
-- [ ] Unread badge stays consistent after mark-read
+- [x] Match and message events produce inbox rows within a few seconds of backend processing
+- [x] Unread badge stays consistent after mark-read
 
 ---
 
@@ -232,7 +232,7 @@ Keep old routes as redirects during migration so demos do not break.
 
 ## 5. API client contracts (consume-only)
 
-Centralize in `src/api/` modules: `auth.js`, `profile.js`, `personality.js`, `preferences.js`, `discover.js`, `matches.js`, `conversations.js`, `media.js`, `notifications.js`.
+Centralize in `src/api/` modules (TypeScript): `auth.ts`, `profile.ts`, `personality.ts`, `preferences.ts`, `discover.ts`, `matches.ts`, `conversations.ts`, `media.ts`, `notifications.ts`.
 
 ### Auth (B)
 
@@ -401,33 +401,33 @@ Migrate incrementally; do not big-bang rewrite in M1.
 
 ### M1
 
-- [ ] API client supports `/api/v1` + refresh interceptor
-- [ ] Login / register / logout / me
-- [ ] Onboarding shell: quiz + preferences + profile forms wired to B
-- [ ] Basic Query provider + error toasts
-- [ ] Route gate for onboarding flags
+- [x] API client supports `/api/v1` + refresh interceptor
+- [x] Login / register / logout / me
+- [x] Onboarding shell: quiz + preferences + profile forms wired to B
+- [x] Basic Query provider + error toasts
+- [x] Route gate for onboarding flags
 
 ### M2
 
-- [ ] Discover feed + like/pass + match celebration
-- [ ] Matches list + open chat via `match_id`
-- [ ] Photo upload with progress
-- [ ] Chat REST history + polling fallback
-- [ ] Redirects from legacy routes
+- [x] Discover feed + like/pass + match celebration
+- [x] Matches list + open chat via `match_id`
+- [x] Photo upload with progress
+- [x] Chat REST history + polling fallback
+- [x] Redirects from legacy routes
 
 ### M3
 
-- [ ] WebSocket chat integration
-- [ ] Notifications bell + inbox
-- [ ] Block / report flows
-- [ ] Session management UI
+- [x] WebSocket chat integration
+- [x] Notifications bell + inbox
+- [x] Block / report flows
+- [x] Session management UI
 
 ### M4
 
-- [ ] Virtualized lists, image discipline, bundle budget met
-- [ ] Error boundaries + empty/error/loading consistency
-- [ ] A11y pass on primary flows
-- [ ] Remove legacy API paths from client
+- [x] Virtualized lists, image discipline, bundle budget met
+- [x] Error boundaries + empty/error/loading consistency
+- [x] A11y pass on primary flows
+- [x] Remove legacy API paths from client
 
 ---
 

@@ -1,0 +1,429 @@
+/* ============================================================
+   Landing — the public page. Set like a printed page: a long
+   measure, hairline rules between movements, and one accent.
+   ============================================================ */
+
+.lp {
+  width: 100%;
+  max-width: 62rem;
+  margin: 0 auto;
+  padding: 0 1.25rem 4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 4rem;
+}
+
+/* ---------- nav ---------- */
+.lp-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.2rem 0;
+  border-bottom: 1px solid var(--rule);
+}
+.lp-nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+}
+.lp-link {
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+}
+.lp-link:hover {
+  color: var(--accent);
+}
+.lp-nav-cta {
+  padding: 0.55rem 1rem;
+  font-size: 0.9rem;
+}
+
+/* ---------- hero ---------- */
+.lp-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 1.5rem 0 0;
+}
+.lp-hero h1 {
+  margin: 0.5rem 0 0;
+  font-size: clamp(2.8rem, 10vw, 5rem);
+  line-height: 1.02;
+  letter-spacing: -0.028em;
+  font-weight: 500;
+}
+.lp-hero-sub {
+  margin: 1.4rem 0 0;
+  max-width: 42ch;
+  font-size: clamp(1.05rem, 2.4vw, 1.2rem);
+  color: var(--ink-soft);
+}
+.lp-cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  margin-top: 2rem;
+}
+.lp-microcopy {
+  margin: 1.1rem 0 0;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.03em;
+  color: var(--ink-mute);
+}
+
+/* ---------- section furniture ---------- */
+.lp-section {
+  display: flex;
+  flex-direction: column;
+  padding-top: 3rem;
+  border-top: 1px solid var(--rule);
+}
+.lp-section > h2,
+.lp-final h2 {
+  margin: 0 0 0.7rem;
+  font-size: clamp(1.7rem, 4.5vw, 2.4rem);
+  font-weight: 500;
+}
+.lp-section-sub {
+  margin: 0 0 2rem;
+  max-width: 58ch;
+  color: var(--ink-soft);
+}
+
+/* ---------- how it works ---------- */
+.lp-steps {
+  list-style: none;
+  margin: 1.5rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 2rem;
+  grid-template-columns: 1fr;
+}
+.lp-steps li {
+  position: relative;
+  padding-top: 1.1rem;
+  border-top: 2px solid var(--ink);
+}
+.lp-step-n {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  color: var(--accent);
+  display: block;
+  margin-bottom: 0.7rem;
+}
+.lp-step-n::before {
+  content: 'STEP ';
+  color: var(--ink-mute);
+}
+.lp-step-icon {
+  display: none;
+}
+.lp-steps h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.3rem;
+  font-weight: 500;
+}
+.lp-steps p {
+  margin: 0;
+  font-size: 0.96rem;
+}
+
+/* ---------- interactive demo ---------- */
+.lp-demo {
+  display: grid;
+  gap: 2rem;
+  grid-template-columns: 1fr;
+  align-items: start;
+}
+.lp-demo-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 1.3rem;
+}
+.lp-demo-label {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.lp-slider {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.lp-slider label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  color: var(--ink);
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+.lp-slider label b {
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.lp-slider-blurb {
+  color: var(--ink-mute);
+  font-size: 0.82rem;
+}
+.lp-slider input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 2px;
+  margin: 0.6rem 0 0.35rem;
+  border-radius: 0;
+  background: var(--rule-strong);
+  outline: none;
+  cursor: pointer;
+}
+.lp-slider input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 3px solid var(--paper);
+  box-shadow: 0 0 0 1px var(--accent);
+  cursor: grab;
+}
+.lp-slider input[type='range']::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 3px solid var(--paper);
+  cursor: grab;
+}
+
+.lp-demo-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 1rem;
+  padding: 1.8rem 1.5rem;
+  background: var(--paper-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+}
+.lp-sample b {
+  display: block;
+  font-family: var(--serif);
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+.lp-sample-detail {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--ink-mute);
+}
+.lp-sample p {
+  margin: 0.7rem 0 0;
+  font-size: 0.93rem;
+  max-width: 32ch;
+  font-style: italic;
+  font-family: var(--serif);
+  font-size: 1rem;
+}
+
+.lp-bars {
+  list-style: none;
+  margin: 0.6rem 0 0;
+  padding: 0.9rem 0 0;
+  width: 100%;
+  border-top: 1px solid var(--rule);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.lp-bars li {
+  display: grid;
+  grid-template-columns: minmax(6rem, auto) 1fr 2.2rem;
+  align-items: center;
+  gap: 0.7rem;
+  text-align: left;
+}
+.lp-bar-label {
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+.lp-bar-track {
+  height: 6px;
+  background: var(--paper-sunk);
+}
+.lp-bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.4s var(--ease);
+}
+.lp-bar-val {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  color: var(--ink);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.lp-disclaimer {
+  margin: 0.3rem 0 0;
+  font-size: 0.78rem;
+  color: var(--ink-mute);
+  max-width: 36ch;
+}
+
+/* ---------- what we don't do ---------- */
+.lp-nots,
+.lp-trust-grid {
+  display: grid;
+  gap: 0;
+  grid-template-columns: 1fr;
+  margin-top: 1.5rem;
+  border-top: 1px solid var(--rule);
+}
+.lp-nots div,
+.lp-trust-grid div {
+  padding: 1.5rem 0;
+  border-bottom: 1px solid var(--rule);
+}
+.lp-nots h3,
+.lp-trust-grid h3 {
+  margin: 0 0 0.4rem;
+  font-size: 1.15rem;
+  font-weight: 500;
+}
+.lp-nots p,
+.lp-trust-grid p {
+  margin: 0;
+  font-size: 0.95rem;
+  max-width: 52ch;
+}
+.lp-trust-icon {
+  display: inline-grid;
+  color: var(--accent);
+  margin-bottom: 0.7rem;
+}
+.lp-trust-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* ---------- faq ---------- */
+.lp-faq {
+  margin-top: 1.4rem;
+  border-top: 1px solid var(--rule);
+}
+.lp-faq details {
+  border-bottom: 1px solid var(--rule);
+}
+.lp-faq summary {
+  cursor: pointer;
+  padding: 1.1rem 0;
+  font-family: var(--serif);
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--ink);
+  list-style: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1.5rem;
+}
+.lp-faq summary::-webkit-details-marker {
+  display: none;
+}
+.lp-faq summary::after {
+  content: '+';
+  font-family: var(--mono);
+  font-size: 1.1rem;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.lp-faq details[open] summary::after {
+  content: '–';
+}
+.lp-faq details p {
+  margin: 0 0 1.3rem;
+  font-size: 0.97rem;
+  max-width: 64ch;
+}
+
+/* ---------- final cta ---------- */
+.lp-final {
+  text-align: center;
+  padding: 3.5rem 1.5rem;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+.lp-final h2 {
+  margin-bottom: 0.6rem;
+}
+.lp-final p {
+  margin: 0 auto 1.8rem;
+  max-width: 40ch;
+  color: var(--ink-soft);
+}
+
+/* ---------- footer ---------- */
+.lp-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem 1.8rem;
+  color: var(--ink-mute);
+  font-size: 0.86rem;
+}
+.lp-footer-links {
+  display: flex;
+  gap: 1.3rem;
+  margin-right: auto;
+}
+.lp-footer-links a {
+  color: var(--ink-soft);
+}
+.lp-footer p {
+  margin: 0;
+}
+
+/* ---------- wider screens ---------- */
+@media (min-width: 720px) {
+  .lp {
+    padding: 0 2rem 5rem;
+    gap: 5rem;
+  }
+  .lp-steps {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.8rem;
+  }
+  .lp-demo {
+    grid-template-columns: 1fr 1fr;
+    gap: 3rem;
+  }
+  .lp-nots,
+  .lp-trust-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0 2.5rem;
+  }
+}
+
+@media (max-width: 560px) {
+  .lp-nav-cta {
+    display: none;
+  }
+  .lp-cta-row .btn {
+    width: 100%;
+  }
+}

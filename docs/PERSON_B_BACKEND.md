@@ -15,6 +15,11 @@ This document is the complete backend playbook for Person B: gap analysis, featu
 
 ## 2. Current backend baseline (your domain)
 
+> **Status:** the table below is the original gap analysis, kept for context. Most
+> of it is now built — see the [milestone checklist](#9-milestone-checklist-b) for
+> what is done and what is still blocked, and
+> [PERSON_B_API.md](./PERSON_B_API.md) for the implemented contract.
+
 | Area | Exists | Gap |
 |------|--------|-----|
 | Register / login | JWT HS256 24h, bcrypt | No refresh, logout revoke, password reset, sessions |
@@ -176,6 +181,8 @@ Migration files: `002_b_auth_sessions.sql`, `003_b_personality_questions.sql`, `
 | GET | `/api/v1/auth/me` | Access | User + onboarding flags |
 | POST | `/api/v1/auth/password/forgot` | No | Always 202; enqueue email event |
 | POST | `/api/v1/auth/password/reset` | No | token + new password |
+| POST | `/api/v1/auth/email/verify` | No | token; sets `email_verified_at` |
+| POST | `/api/v1/auth/email/resend` | Access | new confirmation token |
 | GET | `/api/v1/auth/sessions` | Access | List sessions |
 | DELETE | `/api/v1/auth/sessions/:id` | Access | Revoke |
 
@@ -183,7 +190,7 @@ Migration files: `002_b_auth_sessions.sql`, `003_b_personality_questions.sql`, `
 
 - **Access:** JWT, 15 minutes, claims `typ=access`, `user_id`, `sid`
 - **Refresh:** opaque random (32+ bytes) stored **hashed** in `auth_sessions`, 30 days; rotate on use
-- Optional: also cache session revoke list in Redis (C) for fast logout propagation — call `platform/redis`
+- Optional: also cache session revoke list in Redis (C) for fast logout propagation — call `platform/redis`. **Not implemented.** Logout revokes the refresh session immediately; the access JWT is short-lived (15m) and is not denylisted.
 
 #### `/me` response
 
@@ -292,6 +299,11 @@ Body:
 ```
 
 `preferences_done` = age range set + at least one gender (define clearly in code).
+
+`max_distance_km` is applied in discover SQL (Haversine on `profiles.lat`/`lng`)
+when the viewer has coordinates. `distance_filter_active` is true whenever the
+preference is set. Trait weights **are** applied as a weighted average in the
+discover SQL.
 
 ---
 
@@ -438,49 +450,113 @@ Write event in same transaction as match; C’s publisher worker drains outbox (
 
 ## 8. Testing plan (B)
 
-| Layer | Cases |
-|-------|--------|
-| Unit | Similarity / weighted score; cursor encode/decode; trait normalize |
-| Integration | Register→quiz→prefs→discover order; like→mutual match→event; block excludes; refresh rotate; reset password |
-| Regression | Public DTOs contain no `email` field |
+| Layer | Cases | Where |
+|-------|--------|-------|
+| Unit | Similarity / weighted score; cursor encode/decode; trait normalize; token issue/verify; password policy; request decoding and validation; cache expiry and eviction; config validation | alongside each package, e.g. `internal/domain/traits_test.go`, `internal/matching/cursor_test.go`, `internal/auth/token_test.go` |
+| Routing | 404 vs 405 with `Allow`; every route reaches its handler; CORS allowlist | `internal/router/router_test.go` |
+| Integration | Register→quiz→prefs→discover order; like→mutual match→event; concurrent mutual likes; block excludes; refresh rotate and replay; reset password | `internal/integration/` |
+| Regression | Public DTOs contain no `email` field, on both the v1 and legacy mounts | `internal/integration/discover_test.go`, `legacy_test.go` |
 
-Use `go test` with testcontainers or a dockerized Postgres in CI (C sets up CI; you write tests).
+Run unit tests with `go test ./...`. The integration suite needs a real Postgres
+and skips itself unless `TEST_DATABASE_URL` is set; it truncates the tables it
+uses, so point it at a throwaway database. C owns CI and should add
+`go test -race`, which needs a cgo toolchain.
+
+Two details worth knowing before adding integration tests:
+
+- The seeded question bank is balanced (equal forward and reverse items per
+  trait), so answering every question with the same value always scores 0.5 on
+  every trait. Use the level-based fixtures in `client_test.go`
+  (`submitAssessmentPerTrait`, `traitValueForLevel`) when a test needs distinct
+  trait values.
+- Tests share one database and run sequentially; `resetDB` truncates between
+  them. Do not add `t.Parallel()` to a test that asserts on the contents of the
+  discovery feed.
 
 ---
 
 ## 9. Milestone checklist (B)
 
+Implemented endpoints and their exact contracts are in
+[PERSON_B_API.md](./PERSON_B_API.md).
+
+### Spec coverage (required vs optional)
+
+| Spec item | Status |
+|-----------|--------|
+| F01–F04 auth (access + refresh rotation/reuse, logout, sessions) | Required — done |
+| F03 password reset (hashed token, 202 forgot, revoke all sessions) | Required — done |
+| Email verification (`/auth/email/verify`, `/auth/email/resend`) | Required leftover — done; login is **not** gated |
+| F05 profile CRUD + F16 no email on public/discover/match DTOs | Required — done |
+| F06 photos: HTTPS URLs **and** C `asset_ids` | Required — done |
+| F07–F08 quiz, 0–1 traits, 30-day retake, cache invalidate | Required — done |
+| F09 prefs: age, gender, **trait_weights applied in SQL scoring** | Required — done |
+| F09 `max_distance_km` | Applied in discover SQL (Haversine) when viewer has `profiles.lat`/`lng`; `distance_filter_active` is true when the pref is set |
+| F10–F13 discover SQL prefilter, score sort, cursor, likes, mutual match, outbox | Required — done |
+| F14–F15 block/report + `user.blocked` | Required — done |
+| Redis `sess:{sid}` access-token denylist | **Optional** — not built; logout revokes refresh immediately; access JWT dies at expiry (~15m) |
+| `discover:prefetch:{user_id}` | **Optional** — not built; trait cache is the M2 cache |
+| `Idempotency-Key` on likes | Roadmap “recommended M3” — CORS allows the header; swipe uniqueness is the idempotency key |
+| Auth rate limit on **v1** register/login/forgot/refresh/verify | Required (C F24) — wired; no-op without `REDIS_URL` (fail-closed when Redis is up and errors) |
+| M4 load-test / explain-analyze / cache-hit metrics | **Deferred M4** |
+
+Error handling that is intentional, not a gap: forgot-password always 202; login uses one `invalid_credentials` and burns a bcrypt compare on unknown emails; cross-account session ids and blocked public profiles are 404 not 403; self-like/block/report are 422; unexpected errors are generic 500.
+
 ### M1
 
-- [ ] `/api/v1/auth/*` access + refresh + logout + me flags
-- [ ] Profile GET/PUT (interests)
-- [ ] Preferences GET/PUT
-- [ ] Assessment GET/submit + seed questions
-- [ ] Personality GET me
-- [ ] Remove email from any candidate DTO still under `/api/matches` shim or v1 discover preview
-- [ ] Migrations applied; env documented for token TTLs
+- [x] `/api/v1/auth/*` access + refresh + logout + me flags — rotation with reuse
+      detection, session list/revoke, password reset
+- [x] Profile GET/PUT (interests) — merge semantics, canonical genders
+- [x] Preferences GET/PUT — replace semantics, validated bounds
+- [x] Assessment GET/submit + seed questions — 30 balanced Big Five items in
+      migration 004
+- [x] Personality GET me
+- [x] Remove email from any candidate DTO still under `/api/matches` shim or v1
+      discover preview — public payloads share one `PublicProfile` type that has
+      no email field, so a new endpoint cannot reintroduce the leak
+- [x] Migrations applied; env documented for token TTLs — see
+      [`backend/env.example`](../backend/env.example)
 
 ### M2
 
-- [ ] Discover scored + filtered + cursor
-- [ ] Likes/pass + mutual match + `match.created`
-- [ ] Match list
-- [ ] Profile photos integration with C URLs
-- [ ] Trait Redis cache
-- [ ] Integration tests for match path
+- [x] Discover scored + filtered + cursor — scored in SQL, keyset cursor
+- [x] Likes/pass + mutual match + `match.created` — advisory-locked, so
+      concurrent mutual likes create exactly one match and one event
+- [x] Match list
+- [x] Profile photos gallery with URL safety rules
+- [x] Profile photos integration with C URLs — `PUT /profile/photos` with
+      `asset_ids` resolves owned, ready media assets through C's media service
+- [x] Trait Redis cache — `cache.Redis` is used when `REDIS_URL` is set;
+      otherwise the in-process TTL cache
+- [x] Integration tests for match path
 
 ### M3
 
-- [ ] Block/report + `user.blocked`
-- [ ] Retake rules
-- [ ] Query/index tuning from explain analyze
-- [ ] Password reset full path with C email stub
+- [x] Block/report + `user.blocked`
+- [x] Retake rules — interval enforced, cache invalidated on retake
+- [x] Password reset full path with C email stub — emits
+      `auth.password_reset_requested`; C's mailer consumes it
+- [x] Email verification — register emits `auth.email_verification_requested`;
+      `POST /auth/email/verify` and authenticated resend; login is not gated
+- [ ] Query/index tuning from explain analyze — indexes are in place from the
+      migrations, but not yet validated against a realistic data volume
 
 ### M4
 
 - [ ] Load-test discover; document results
-- [ ] Cache hit metrics
-- [ ] Outbox reliability verified under worker restart
+- [ ] Cache hit metrics — C's `/metrics` exists; B's trait cache is not labelled yet
+- [ ] Outbox reliability verified under worker restart — outbox now publishes
+      to Redis Streams when `REDIS_URL` is set; not yet load-tested
+
+### Verification status
+
+| Check | State |
+|-------|-------|
+| `go build ./...`, `go vet ./...` | Clean |
+| Unit tests (`domain`, `httpx`, `auth`, `personality`, `matching`, `cache`, `config`, `router`) | Passing |
+| Integration tests against real Postgres | Passing — auth, profile, personality, preferences, discovery, matching, legacy compatibility |
+| `go test -race` | **Not yet run.** Needs a cgo toolchain, which the current Windows dev box lacks; it should run in C's Linux CI. The concurrency-sensitive paths (mutual match, outbox drainer, trait cache) do have concurrent test coverage, but without the detector |
+| `gofmt -l` | Clean on content. Every file in the repo uses CRLF, which `gofmt` reports as unformatted; a `.gitattributes` with `*.go text eol=lf` is the fix and is C's call as CI owner |
 
 ---
 
@@ -522,6 +598,8 @@ If you need a platform capability, open a request for C with feature ID.
 
 ## 13. References
 
+- Implemented API contract: [PERSON_B_API.md](./PERSON_B_API.md)
+- Configuration reference: [`backend/env.example`](../backend/env.example)
 - Shared roadmap: [00_SHARED_ROADMAP.md](./00_SHARED_ROADMAP.md)
 - Frontend consumer: [PERSON_A_FRONTEND.md](./PERSON_A_FRONTEND.md)
 - Infra & messaging: [PERSON_C_BACKEND.md](./PERSON_C_BACKEND.md)

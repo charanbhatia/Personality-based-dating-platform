@@ -3,138 +3,144 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"sort"
 	"strconv"
 
-	"github.com/bits-assignment/dating-platform/backend/internal/middleware"
+	"github.com/bits-assignment/dating-platform/backend/internal/auth"
+	"github.com/bits-assignment/dating-platform/backend/internal/domain"
+	"github.com/bits-assignment/dating-platform/backend/internal/httpx"
+	"github.com/bits-assignment/dating-platform/backend/internal/profile"
 	"github.com/bits-assignment/dating-platform/backend/internal/repository"
-	"github.com/google/uuid"
-	"github.com/gorilla/mux"
 )
 
+// MatchHandler serves the legacy /api/matches preview.
+//
+// Superseded by GET /api/v1/discover, which filters by preferences, excludes
+// blocks and prior swipes, scores in SQL and paginates by cursor. This shim
+// remains only until Person A migrates.
 type MatchHandler struct {
-	ProfileRepo *repository.ProfileRepo
-	UserRepo    *repository.UserRepo
+	ProfileRepo    *repository.ProfileRepo
+	ProfileService *profile.Service
 }
 
-type MatchItem struct {
-	UserID     string  `json:"user_id"`
-	Email      string  `json:"email"`
-	Name       string  `json:"name"`
-	Bio        string  `json:"bio"`
-	Gender     string  `json:"gender"`
-	Location   string  `json:"location"`
-	PhotoURL   string  `json:"photo_url"`
-	Score      float64 `json:"score"`
+// legacyMatchItem is the pre-v1 card shape.
+//
+// The email field the original implementation returned has been removed: it
+// exposed every other user's address to any authenticated caller (roadmap F16).
+type legacyMatchItem struct {
+	UserID   string  `json:"user_id"`
+	Name     string  `json:"name"`
+	Bio      string  `json:"bio"`
+	Gender   string  `json:"gender"`
+	Location string  `json:"location"`
+	PhotoURL string  `json:"photo_url"`
+	Score    float64 `json:"score"`
 }
 
-func (h *MatchHandler) List(w http.ResponseWriter, r *http.Request) {
-	userID, ok := middleware.UserIDFromContext(r.Context())
-	if !ok {
-		WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
-		return
+const (
+	legacyDefaultLimit = 20
+	legacyMaxLimit     = 100
+)
+
+func (h *MatchHandler) List(w http.ResponseWriter, r *http.Request) error {
+	userID, err := auth.RequireUser(r.Context())
+	if err != nil {
+		return err
 	}
-	limit := 20
+	markDeprecated(w, "/api/v1/discover")
+
+	limit, err := httpx.QueryLimit(r, legacyDefaultLimit, legacyMaxLimit)
+	if err != nil {
+		return err
+	}
 	offset := 0
-	if l := r.URL.Query().Get("limit"); l != "" {
-		if n, err := strconv.Atoi(l); err == nil && n > 0 && n <= 100 {
-			limit = n
+	if raw := r.URL.Query().Get("offset"); raw != "" {
+		parsed, convErr := strconv.Atoi(raw)
+		if convErr != nil || parsed < 0 {
+			return httpx.BadRequest("offset must be a non-negative integer")
 		}
+		offset = parsed
 	}
-	if o := r.URL.Query().Get("offset"); o != "" {
-		if n, err := strconv.Atoi(o); err == nil && n >= 0 {
-			offset = n
-		}
-	}
+
 	candidates, err := h.ProfileRepo.ListCandidates(r.Context(), userID, limit, offset)
 	if err != nil {
-		WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to list matches"})
-		return
+		return httpx.Internal(err)
 	}
-	myTraits, _ := h.ProfileRepo.GetPersonality(r.Context(), userID)
-	myMap := parseTraits(myTraits)
-	out := make([]MatchItem, 0, len(candidates))
+	viewerTraits, _ := h.ProfileRepo.GetPersonality(r.Context(), userID)
+	viewer := parseTraits(viewerTraits)
+
+	items := make([]legacyMatchItem, 0, len(candidates))
 	for _, c := range candidates {
-		score := similarity(myMap, c.TraitsJSON)
-		out = append(out, MatchItem{
+		items = append(items, legacyMatchItem{
 			UserID:   c.UserID.String(),
-			Email:    c.Email,
 			Name:     c.Name,
 			Bio:      c.Bio,
 			Gender:   c.Gender,
 			Location: c.Location,
 			PhotoURL: c.PhotoURL,
-			Score:    score,
+			Score:    domain.Compatibility(viewer, parseTraits([]byte(c.TraitsJSON)), nil),
 		})
 	}
-	WriteJSON(w, http.StatusOK, map[string]interface{}{"matches": out})
-}
-
-func (h *MatchHandler) Get(w http.ResponseWriter, r *http.Request) {
-	userID, ok := middleware.UserIDFromContext(r.Context())
-	if !ok {
-		WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
-		return
-	}
-	vars := mux.Vars(r)
-	idStr := vars["id"]
-	targetID, err := uuid.Parse(idStr)
-	if err != nil {
-		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid id"})
-		return
-	}
-	u, err := h.UserRepo.GetByID(r.Context(), targetID)
-	if err != nil {
-		WriteJSON(w, http.StatusNotFound, map[string]string{"error": "user not found"})
-		return
-	}
-	p, err := h.ProfileRepo.GetByUserID(r.Context(), targetID)
-	if err != nil {
-		WriteJSON(w, http.StatusNotFound, map[string]string{"error": "profile not found"})
-		return
-	}
-	myTraits, _ := h.ProfileRepo.GetPersonality(r.Context(), userID)
-	theirTraits, _ := h.ProfileRepo.GetPersonality(r.Context(), targetID)
-	score := similarity(parseTraits(myTraits), string(theirTraits))
-	WriteJSON(w, http.StatusOK, MatchItem{
-		UserID:   u.ID.String(),
-		Email:    u.Email,
-		Name:     u.Name,
-		Bio:      p.Bio,
-		Gender:   p.Gender,
-		Location: p.Location,
-		PhotoURL: p.PhotoURL,
-		Score:    score,
-	})
-}
-
-func parseTraits(b []byte) map[string]float64 {
-	var m map[string]float64
-	_ = json.Unmarshal(b, &m)
-	if m == nil {
-		m = make(map[string]float64)
-	}
-	return m
-}
-
-func similarity(a map[string]float64, bJSON string) float64 {
-	var b map[string]float64
-	_ = json.Unmarshal([]byte(bJSON), &b)
-	if b == nil {
-		b = make(map[string]float64)
-	}
-	var sum, count float64
-	for k, v1 := range a {
-		if v2, ok := b[k]; ok {
-			diff := v1 - v2
-			if diff < 0 {
-				diff = -diff
-			}
-			sum += 1 - diff
-			count++
+	// Sorted within the page only. Offset paging cannot order globally by a
+	// computed score; /api/v1/discover does that correctly with a keyset cursor.
+	sort.SliceStable(items, func(i, j int) bool {
+		if items[i].Score != items[j].Score {
+			return items[i].Score > items[j].Score
 		}
+		return items[i].UserID < items[j].UserID
+	})
+
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"matches": items})
+	return nil
+}
+
+// Get returns one user's card. Now delegates to the profile service so the
+// public payload and its block rules are enforced in one place.
+func (h *MatchHandler) Get(w http.ResponseWriter, r *http.Request) error {
+	viewerID, err := auth.RequireUser(r.Context())
+	if err != nil {
+		return err
 	}
-	if count == 0 {
-		return 0.5
+	markDeprecated(w, "/api/v1/users/{id}/public")
+
+	targetID, err := httpx.PathUUID(r, "id")
+	if err != nil {
+		return err
 	}
-	return sum / count
+	public, err := h.ProfileService.GetPublic(r.Context(), viewerID, targetID)
+	if err != nil {
+		return err
+	}
+
+	viewerTraits, _ := h.ProfileRepo.GetPersonality(r.Context(), viewerID)
+	targetTraits, _ := h.ProfileRepo.GetPersonality(r.Context(), targetID)
+
+	httpx.WriteJSON(w, http.StatusOK, legacyMatchItem{
+		UserID:   public.UserID.String(),
+		Name:     public.Name,
+		Bio:      public.Bio,
+		Gender:   public.Gender,
+		Location: public.Location,
+		PhotoURL: public.PrimaryPhotoURL,
+		Score:    domain.Compatibility(parseTraits(viewerTraits), parseTraits(targetTraits), nil),
+	})
+	return nil
+}
+
+func parseTraits(raw []byte) domain.Traits {
+	if len(raw) == 0 {
+		return domain.Traits{}
+	}
+	var traits domain.Traits
+	if err := json.Unmarshal(raw, &traits); err != nil {
+		return domain.Traits{}
+	}
+	return traits
+}
+
+// markDeprecated advertises the replacement endpoint per RFC 8594, so the
+// migration is discoverable from the API itself rather than only from the docs.
+func markDeprecated(w http.ResponseWriter, successor string) {
+	w.Header().Set("Deprecation", "true")
+	w.Header().Set("Link", `<`+successor+`>; rel="successor-version"`)
 }

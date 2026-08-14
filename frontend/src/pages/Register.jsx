@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { afterAuthPath } from '../lib/onboarding';
 import AuthShell from '../components/AuthShell';
 
 export default function Register() {
@@ -18,16 +19,11 @@ export default function Register() {
     setError('');
     setLoading(true);
     try {
-      const payload = { email, password, name };
-      if (dateOfBirth) payload.date_of_birth = dateOfBirth;
-      await register(payload);
-      navigate('/');
+      const u = await register({ email, password, name, date_of_birth: dateOfBirth });
+      navigate(afterAuthPath(u));
     } catch (err) {
-      if (err.code === 'ERR_NETWORK' || err.message === 'Network Error') {
-        setError('Cannot reach server. Is the backend running at http://localhost:8080?');
-      } else {
-        setError(err.response?.data?.error || 'Registration failed');
-      }
+      // See Login.jsx — only interceptor-normalized errors are safe to show.
+      setError(err.response || err.code ? err.message : 'Registration failed');
     } finally {
       setLoading(false);
     }
@@ -39,7 +35,7 @@ export default function Register() {
         <h1>Create your account</h1>
         <p className="auth-sub">A few details and you'll start meeting kindred spirits.</p>
         <form onSubmit={handleSubmit}>
-          {error && <p className="alert alert-error error">{error}</p>}
+          {error && <div className="alert alert-error" role="alert">{error}</div>}
           <div className="field">
             <label htmlFor="name">Name</label>
             <input
@@ -73,6 +69,7 @@ export default function Register() {
               placeholder="Create a password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              minLength={8}
               required
             />
           </div>
@@ -84,6 +81,7 @@ export default function Register() {
               type="date"
               value={dateOfBirth}
               onChange={(e) => setDateOfBirth(e.target.value)}
+              required
             />
           </div>
           <button type="submit" className="btn btn-primary btn-block" disabled={loading}>

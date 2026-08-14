@@ -43,6 +43,7 @@ Personality-based-dating-platform/
 │   ├── 00_SHARED_ROADMAP.md
 │   ├── PERSON_A_FRONTEND.md
 │   ├── PERSON_B_BACKEND.md
+│   ├── PERSON_B_API.md        # Implemented auth/profile/personality/matching API
 │   └── PERSON_C_BACKEND.md
 ├── backend/                   # Go API server
 ├── frontend/                  # React SPA
@@ -61,19 +62,44 @@ Personality-based-dating-platform/
 
 ```bash
 createdb dating_platform
-psql dating_platform -f backend/migrations/001_init.sql
+```
+
+Schema changes are applied by a migration runner, not by loading a single file:
+the server applies anything pending at boot, or run it as a separate step.
+
+```bash
+cd backend
+go run ./cmd/migrate            # apply pending migrations
+go run ./cmd/migrate -status    # show what is applied
 ```
 
 ### Backend
 
 ```bash
 cd backend
-cp env.example .env       # set DATABASE_URL, JWT_SECRET
+cp env.example .env       # defaults boot a working development server
 go mod download
-go run cmd/server/main.go
+go run ./cmd/server
 ```
 
-API runs at `http://localhost:8080`.
+API runs at `http://localhost:8080`; `GET /health` needs no authentication.
+Every setting is documented in [backend/env.example](backend/env.example).
+
+Optional demo data — fully onboarded users with traits, preferences and photos,
+plus 10 pre-made matches and conversations:
+
+```bash
+go run ./cmd/seed
+# password for every seeded account: password123
+# user1@example.com  ↔  user2@example.com   (already matched, has a chat)
+# user21@example.com+                       (discoverable, not pre-matched)
+```
+
+Person C's worker (optional; needs Redis):
+
+```bash
+go run ./cmd/worker
+```
 
 ### Frontend
 
@@ -85,20 +111,24 @@ npm run dev
 
 App runs at `http://localhost:5173`. Set `VITE_API_URL=http://localhost:8080` if the API is elsewhere.
 
-## API Overview (current PoC)
+## API Overview
 
-Legacy paths under `/api/...`. MVP work migrates to `/api/v1/...` (see shared roadmap).
+Current endpoints live under `/api/v1/...`. Full request and response shapes,
+error codes and the emitted event contracts are in
+[docs/PERSON_B_API.md](docs/PERSON_B_API.md).
 
-- `POST /api/auth/register` — Register
-- `POST /api/auth/login` — Login (returns JWT)
-- `GET /api/auth/me` — Current user (Bearer token)
-- `GET /api/profile` — Get own profile
-- `PUT /api/profile` — Update profile
-- `GET /api/matches` — Get match recommendations
-- `GET /api/conversations` — List conversations
-- `POST /api/conversations` — Start conversation (body: `{"user_id": "uuid"}`)
-- `GET /api/conversations/:id/messages` — Get messages
-- `POST /api/conversations/:id/messages` — Send message (body: `{"content": "..."}`)
+| Group | Endpoints |
+|-------|-----------|
+| Auth | `POST /auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`, `/auth/password/forgot`, `/auth/password/reset`; `GET /auth/me`, `/auth/sessions`; `DELETE /auth/sessions/{id}` |
+| Profile | `GET`/`PUT /profile`, `PUT /profile/photos`, `GET /profile/options`, `GET /users/{id}/public` |
+| Personality | `GET /personality/assessment`, `POST /personality/assessment/submit`, `GET /personality/me` |
+| Preferences | `GET`/`PUT /preferences` |
+| Discovery | `GET /discover`, `POST /likes`, `GET /matches` |
+| Safety | `GET`/`POST /blocks`, `DELETE /blocks/{id}`, `POST /reports` |
+
+The pre-v1 paths (`/api/auth/*`, `/api/profile`, `/api/matches`) still work for
+the current SPA and carry a `Deprecation` header naming their replacement.
+Messaging endpoints (`/api/conversations/...`) are Person C's.
 
 ## License
 

@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import Brand from './Brand';
 import { IconHeart, IconSpark, IconShield } from './Icons';
 
 // Split-screen auth layout: an immersive brand story on the left, the form on
@@ -7,19 +7,11 @@ export default function AuthShell({ children }) {
   return (
     <div className="auth-wrap">
       <aside className="auth-brand">
-        <Link to="/" className="brand">
-          <span className="brand-mark">
-            <IconHeart />
-          </span>
-          <span className="brand-name">
-            <b>Kin</b>
-            <span>dred</span>
-          </span>
-        </Link>
+        <Brand />
 
         <div className="auth-hero">
           <h2>
-            Meet minds,<br />not just <span className="text-gradient">faces.</span>
+            Meet minds,<br />not just <span className="text-accent">faces.</span>
           </h2>
           <p>
             Kindred pairs you on personality, values and the way you think — so every

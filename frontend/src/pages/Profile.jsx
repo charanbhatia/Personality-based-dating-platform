@@ -1,53 +1,84 @@
 import { useState, useEffect } from 'react';
-import { profile as profileApi } from '../api';
+import { useQuery } from '@tanstack/react-query';
+import { profile as profileApi, qk } from '../api';
 import { useAuth } from '../context/AuthContext';
+import { photoOf } from '../lib/compat';
 import Avatar from '../components/Avatar';
-import { IconUser, IconSpark } from '../components/Icons';
+import Loading from '../components/Loading';
+import ErrorState from '../components/ErrorState';
+import InterestChips from '../components/InterestChips';
+import PhotoUploader from '../components/PhotoUploader';
+import { IconSpark } from '../components/Icons';
+import { GENDER_LABEL } from '../lib/genders';
+import { locateMe } from '../lib/geo';
 
 export default function Profile() {
   const { user } = useAuth();
-  const [data, setData] = useState({ bio: '', gender: '', location: '', photo_url: '' });
-  const [loading, setLoading] = useState(true);
+  const { data: loaded, error: loadError, isPending, refetch } = useQuery({
+    queryKey: qk.profile,
+    queryFn: () =>
+      Promise.all([profileApi.get(), profileApi.options().catch(() => ({ data: {} }))]).then(
+        ([prof, opts]) => ({ profile: prof.data, genders: opts.data?.genders })
+      ),
+    staleTime: 60_000,
+  });
+  const [data, setData] = useState({
+    bio: '',
+    gender: '',
+    location: '',
+    interests: [],
+    photo_urls: [],
+    lat: null,
+    lng: null,
+  });
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState('');
+  const [status, setStatus] = useState(null);
 
   useEffect(() => {
-    profileApi
-      .get()
-      .then((res) => {
-        const p = res.data;
-        setData({
-          bio: p.bio || '',
-          gender: p.gender || '',
-          location: p.location || '',
-          photo_url: p.photo_url || '',
-        });
-      })
-      .catch(() => setMessage('Failed to load profile'))
-      .finally(() => setLoading(false));
-  }, []);
+    if (!loaded?.profile) return;
+    const p = loaded.profile;
+    const urls = p.photo_urls?.length ? p.photo_urls : (photoOf(p) ? [photoOf(p)] : []);
+    setData({
+      bio: p.bio || '',
+      gender: p.gender || '',
+      location: p.location || '',
+      interests: p.interests || [],
+      photo_urls: urls,
+      lat: p.lat ?? null,
+      lng: p.lng ?? null,
+    });
+  }, [loaded]);
 
   async function handleSubmit(e) {
     e.preventDefault();
     setSaving(true);
-    setMessage('');
+    setStatus(null);
     try {
-      await profileApi.update(data);
-      setMessage('Profile updated');
-    } catch {
-      setMessage('Update failed');
+      await profileApi.update({
+        bio: data.bio,
+        gender: data.gender,
+        location: data.location,
+        interests: data.interests,
+        ...(data.lat != null && data.lng != null ? { lat: data.lat, lng: data.lng } : {}),
+      });
+      setStatus({ text: 'Profile updated', ok: true });
+    } catch (err) {
+      setStatus({ text: err.message || 'Update failed. Your changes were not saved.', ok: false });
     } finally {
       setSaving(false);
     }
   }
 
-  if (loading)
+  if (isPending) return <Loading text="Loading your profile…" />;
+
+  if (loadError || !loaded?.profile)
     return (
-      <div className="loading-page">
-        <div className="spinner" />
-        <p>Loading your profile…</p>
+      <div className="page">
+        <ErrorState text="We couldn't load your profile, so it isn't safe to edit yet." onRetry={() => refetch()} />
       </div>
     );
+
+  const genders = loaded.genders?.length ? loaded.genders : Object.keys(GENDER_LABEL);
 
   return (
     <div className="page">
@@ -56,13 +87,17 @@ export default function Profile() {
       </span>
       <h1>How the world sees you</h1>
       <p>Keep this fresh — it's what powers your matches.</p>
-      {message && <p className="message">{message}</p>}
+      {status && (
+        <div className={`alert ${status.ok ? 'alert-success' : 'alert-error'}`} role="status">
+          {status.text}
+        </div>
+      )}
 
       <div className="profile-grid">
         <div className="profile-preview">
           <Avatar
             name={user?.name}
-            src={data.photo_url || undefined}
+            src={data.photo_urls[0] || undefined}
             seed={user?.id || user?.email}
             size={128}
             ring
@@ -71,7 +106,7 @@ export default function Profile() {
             <div className="pp-name">{user?.name || 'Your name'}</div>
             <div className="pp-meta">
               {data.location || 'Add your location'}
-              {data.gender ? ` · ${data.gender}` : ''}
+              {data.gender ? ` · ${GENDER_LABEL[data.gender] || data.gender}` : ''}
             </div>
           </div>
         </div>
@@ -85,6 +120,7 @@ export default function Profile() {
               value={data.bio}
               onChange={(e) => setData((d) => ({ ...d, bio: e.target.value }))}
               rows={4}
+              maxLength={500}
             />
           </div>
 
@@ -97,10 +133,11 @@ export default function Profile() {
               className="form-select"
             >
               <option value="">Prefer not to say</option>
-              <option value="Male">Male</option>
-              <option value="Female">Female</option>
-              <option value="Non-binary">Non-binary</option>
-              <option value="Other">Other</option>
+              {genders.map((g) => (
+                <option key={g} value={g}>
+                  {GENDER_LABEL[g] || g}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -112,19 +149,36 @@ export default function Profile() {
               placeholder="City, Country"
               value={data.location}
               onChange={(e) => setData((d) => ({ ...d, location: e.target.value }))}
+              maxLength={120}
             />
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={async () => {
+                try {
+                  const pos = await locateMe();
+                  setData((d) => ({ ...d, lat: pos.lat, lng: pos.lng }));
+                } catch (err) {
+                  setStatus({ text: err.message, ok: false });
+                }
+              }}
+            >
+              {data.lat != null ? 'Location saved for distance filter' : 'Use my location for distance'}
+            </button>
           </div>
 
           <div className="field">
-            <label className="form-label" htmlFor="photo">Photo URL</label>
-            <input
-              id="photo"
-              type="text"
-              placeholder="https://…"
-              value={data.photo_url}
-              onChange={(e) => setData((d) => ({ ...d, photo_url: e.target.value }))}
+            <label className="form-label" htmlFor="interests">Interests</label>
+            <InterestChips
+              value={data.interests}
+              onChange={(interests) => setData((d) => ({ ...d, interests }))}
             />
           </div>
+
+          <PhotoUploader
+            photos={data.photo_urls}
+            onChange={(photo_urls) => setData((d) => ({ ...d, photo_urls }))}
+          />
 
           <button type="submit" className="btn btn-primary" disabled={saving}>
             {saving ? 'Saving…' : 'Save changes'}

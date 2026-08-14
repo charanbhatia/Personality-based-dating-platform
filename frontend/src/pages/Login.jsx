@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { afterAuthPath } from '../lib/onboarding';
 import AuthShell from '../components/AuthShell';
 
 export default function Login() {
@@ -16,14 +17,13 @@ export default function Login() {
     setError('');
     setLoading(true);
     try {
-      await login(email, password);
-      navigate('/');
+      const u = await login(email, password);
+      navigate(afterAuthPath(u));
     } catch (err) {
-      if (err.code === 'ERR_NETWORK' || err.message === 'Network Error') {
-        setError('Cannot reach server. Is the backend running at http://localhost:8080?');
-      } else {
-        setError(err.response?.data?.error || 'Login failed');
-      }
+      // Only errors that came back through the axios interceptor carry a message
+      // meant for a user; anything else (a storage quota error, a TypeError)
+      // would otherwise render its raw developer text in the form.
+      setError(err.response || err.code ? err.message : 'Login failed');
     } finally {
       setLoading(false);
     }
@@ -35,7 +35,7 @@ export default function Login() {
         <h1>Welcome back</h1>
         <p className="auth-sub">Log in to pick up where your connections left off.</p>
         <form onSubmit={handleSubmit}>
-          {error && <p className="alert alert-error error">{error}</p>}
+          {error && <div className="alert alert-error" role="alert">{error}</div>}
           <div className="field">
             <label htmlFor="email">Email</label>
             <input
@@ -65,6 +65,8 @@ export default function Login() {
           </button>
         </form>
         <p className="auth-footer">
+          <Link to="/forgot-password">Forgot password?</Link>
+          <br />
           New to Kindred? <Link to="/register">Create an account</Link>
         </p>
       </div>

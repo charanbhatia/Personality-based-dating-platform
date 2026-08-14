@@ -11,6 +11,11 @@
 
 This document is your full playbook: current gaps (including known bugs), feature specs, realtime design, media pipeline, notification workers, and the scaling/runbook layer the whole team depends on.
 
+> **Status (merge branch `feat/b-c-merge`):** M1–M3 below are implemented. The
+> table in §2 is the original gap analysis, kept for context. The live env
+> surface is [`backend/env.example`](../backend/env.example). B's wire contract
+> is [PERSON_B_API.md](./PERSON_B_API.md).
+
 ---
 
 ## 2. Current baseline (your domain + infra)
@@ -26,16 +31,9 @@ This document is your full playbook: current gaps (including known bugs), featur
 | Observability | None | Structured logs, metrics, traces |
 | Middleware | CORS reflect-any Origin | Request ID, rate limit, hardened CORS, ready probe |
 
-### Known bug to fix first (messaging)
+**Now shipped (do not treat the table as current):** match-gated `/api/v1/conversations`, WebSocket at `GET /ws` with Redis fanout, media presign + thumbnail worker, notifications inbox + unread counters, Redis Streams queue + `cmd/worker`, Compose (Postgres/Redis/MinIO/Mailhog/api/worker), CI, `/healthz` `/readyz` `/metrics`, request ID + W3C trace context, rate limits. The `ListByUserID` double-bind bug is fixed and covered by `repository/conversation_test.go`.
 
-In [`backend/internal/repository/conversation.go`](../backend/internal/repository/conversation.go):
-
-```go
-// Query uses only $1, but passes userID twice — pgx may error at runtime
-rows, err := r.pool.Query(ctx, q, userID, userID)
-```
-
-Fix to a single `userID` argument (or rewrite query with two placeholders if intentional). Add a regression test.
+SQL for C domains is `009_c_messaging.sql`, `010_c_media.sql`, `011_c_notifications.sql` so it runs **after** B's `matches` table (`006_b_matching.sql`). B's `012_b_email_verification.sql` follows C's tables. Do not renumber C's files back to `005_c`–`007_c`.
 
 ---
 
@@ -65,14 +63,14 @@ Extend env (maintain `backend/env.example`):
 
 | Variable | Purpose |
 |----------|---------|
+| `APP_ENV` (alias `ENV`) | development / production; B's production JWT/CORS guards |
 | `PORT` | HTTP listen |
 | `DATABASE_URL` | Postgres |
-| `REDIS_URL` | Redis |
-| `JWT_SECRET` | Shared with B |
-| `CORS_ORIGINS` | Comma-separated allowlist |
-| `S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET`, `S3_PUBLIC_BASE_URL` | Media |
+| `REDIS_URL` | Redis; empty disables rate limit, queues, WS fanout |
+| `JWT_SECRET` | Shared with B (`TokenManager`) |
+| `CORS_ALLOWED_ORIGINS` (alias `CORS_ORIGINS`) | Comma-separated allowlist |
+| `S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET`, `S3_PUBLIC_BASE_URL` | Media; empty → media endpoints 503 |
 | `WS_ALLOWED_ORIGINS` | WS check |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | Optional traces |
 | `SMTP_*` or `EMAIL_MODE=log` | Email stub |
 
 ### 4.2 Health & readiness (F23)
@@ -245,8 +243,11 @@ Correct `ListByUserID` parameter binding; order by `last_message_at DESC NULLS L
 { "type": "subscribe", "conversation_id": "..." }
 { "type": "unsubscribe", "conversation_id": "..." }
 { "type": "message.send", "conversation_id": "...", "content": "...", "client_msg_id": "..." }
+{ "type": "typing.start", "conversation_id": "..." }
+{ "type": "typing.stop", "conversation_id": "..." }
 { "type": "message.ack", "client_msg_id": "...", "message": { } }
 { "type": "message.new", "message": { } }
+{ "type": "typing", "conversation_id": "...", "user_id": "...", "typing": true }
 { "type": "error", "code": "...", "message": "..." }
 { "type": "ping" }
 { "type": "pong" }
@@ -356,8 +357,9 @@ CREATE INDEX idx_notifications_user_created ON notifications(user_id, created_at
 | `match.created` | Insert notification for **both** users; bump Redis unread; optional email |
 | `message.created` | Notify **recipient** only; skip if active WS on that conversation (optimization M4) |
 | `auth.password_reset_requested` | Send email (or log in `EMAIL_MODE=log`) |
+| `auth.email_verification_requested` | Send confirmation email (or log in `EMAIL_MODE=log`) |
 
-Push notifications (FCM/APNs): **stub interface** only in MVP — log “would push”.
+Push notifications (FCM/APNs): real pipeline. `POST /api/v1/devices` `{ token, platform: web|android|ios }` upserts a token; `DELETE` removes it. When `FCM_SERVER_KEY` and/or `APNS_*` are set, match/message events push to stored tokens. With no tokens the worker still logs `would push`.
 
 ---
 
@@ -454,38 +456,64 @@ Publish a short `docs/RUNBOOK_LOADTEST.md` in M4 (you author).
 
 ## 11. Milestone checklist (C)
 
+### Spec coverage (required vs optional)
+
+| Spec item | Status |
+|-----------|--------|
+| F23 `/healthz` `/readyz` `/metrics` | Required — done. Empty `REDIS_URL`: ready if Postgres is up, Redis reported `disabled` |
+| F24 request ID, structured logs, CORS allowlist, recover | Required — done. Production refuses empty CORS **and** `*` |
+| F24 stricter auth rate limits | Required — done on **v1 and legacy** register/login/forgot/refresh/verify. No-op without Redis |
+| F25 Prometheus metrics + W3C `traceparent` | Required M3 — done. Full OTLP exporter is **M4** |
+| F26 Compose (Postgres, Redis, MinIO, Mailhog, api, worker) | Required — done (`make up`). README still emphasises local `go run` |
+| F27 CI `go test` + `go vet` + frontend build | Required — done. golangci-lint and compose smoke are **optional** and not in CI |
+| F17–F18 match-gated REST, inbox peer DTO, cursor, `client_msg_id`, `/read` | Required — done |
+| `user.blocked` hide thread | Required — **synchronous**: send/subscribe 403; inbox omits blocked peers. No extra queue consumer (monolith reads `blocks`) |
+| F19 WS `/ws` Bearer + `?access_token=`, Redis fanout, ping/pong | Required — done |
+| Skip notify if recipient has an active WS | **M4 optimization** — not built; every message still inserts an inbox row |
+| F20 presign + complete + worker thumb + `media.processed` | Required — done. Keys use `public/users/...` so thumbs are anonymously readable. 503 without S3 |
+| B attaching photos | Required — B `PUT /profile/photos` resolves `asset_ids`; does not subscribe to `media.processed` |
+| F21 notifications API + match/message consumers + unread Redis | Required — done; idempotent on `event_id` |
+| F22 email stub | Required — done (`EMAIL_MODE=log` or SMTP) including email verification |
+| F22 push (FCM/APNs) | Device tokens + FCM legacy HTTP / APNs p8 when env is set; otherwise log `would push` |
+| Unknown queue events | Ack, do not retry |
+| Legacy `/api/conversations` | Deprecated shim — **not** match-gated; v1 is the contract |
+| M4 two-replica demo doc, load numbers, ops runbooks | **Deferred M4** |
+
+Error handling that is intentional: match missing → 404; not a participant → 403; legacy `{user_id}` while the gate is on → 400; media wrong owner → 403; unknown media id → 404; storage down → 503; rate limit → 429; Redis down on **auth** limits → 503 (fail-closed); Redis down on general API limits → fail-open.
+
 ### M1
 
-- [ ] `platform/` package: config, db pool, redis, middleware, logging
-- [ ] `/healthz`, `/readyz`
-- [ ] Docker Compose: Postgres, Redis, MinIO, api
-- [ ] Rate limit on auth routes
-- [ ] CORS allowlist config
-- [ ] `env.example` updated
-- [ ] Fix conversation `ListByUserID` bug + test
+- [x] `platform/` package: config, redis, middleware, logging, queue, metrics
+- [x] `/healthz`, `/readyz` (and `/health` kept for the current SPA)
+- [x] Docker Compose: Postgres, Redis, MinIO, Mailhog, api, worker
+- [x] Rate limit on auth routes (Redis; no-op without `REDIS_URL`; fail-closed on auth; v1 **and** legacy)
+- [x] CORS allowlist (`CORS_ALLOWED_ORIGINS` / `CORS_ORIGINS`)
+- [x] `env.example` updated — merged with B's auth/outbox knobs
+- [x] Fix conversation `ListByUserID` bug + test
 
 ### M2
 
-- [ ] Media presign + worker thumbnails + asset GET
-- [ ] Conversations match-gated + inbox DTOs with peer info
-- [ ] Messages cursor pagination + idempotent `client_msg_id`
-- [ ] CI pipeline green
-- [ ] Queue skeleton + worker binary boots
+- [x] Media presign + worker thumbnails + asset GET (`010_c_media.sql`)
+- [x] Conversations match-gated + inbox DTOs (`009_c_messaging.sql`)
+- [x] Messages cursor pagination + idempotent `client_msg_id`
+- [x] CI pipeline (`.github/workflows/ci.yml`)
+- [x] Queue skeleton + worker binary (`cmd/worker`)
 
 ### M3
 
-- [ ] WebSocket gateway + Redis fanout
-- [ ] Notifications API + consumers for match/message
-- [ ] Email stub for password reset
-- [ ] Prometheus metrics + basic OTel
-- [ ] Unread counters
+- [x] WebSocket gateway + Redis fanout (`GET /ws`)
+- [x] Notifications API + consumers for match/message (`011_c_notifications.sql`)
+- [x] Email stub for password reset **and** email verification (`EMAIL_MODE=log` or SMTP/Mailhog)
+- [x] Prometheus `/metrics` + W3C `traceparent` on requests (full OTLP exporter still M4)
+- [x] Unread counters
+- [x] Push: `POST/DELETE /api/v1/devices`; FCM/APNs when configured, else log `would push`
 
 ### M4
 
 - [ ] Two-replica WS demo documented
 - [ ] Load-test numbers published
 - [ ] Runbook: restart worker, rotate JWT secret procedure, disk/redis failure
-- [ ] DLQ / retry verified
+- [ ] DLQ / retry verified under worker restart (outbox → Redis Streams is wired; not load-tested)
 
 ---
 
@@ -528,6 +556,8 @@ Publish a short `docs/RUNBOOK_LOADTEST.md` in M4 (you author).
 
 - Shared roadmap: [00_SHARED_ROADMAP.md](./00_SHARED_ROADMAP.md)
 - B domain: [PERSON_B_BACKEND.md](./PERSON_B_BACKEND.md)
+- B API (implemented): [PERSON_B_API.md](./PERSON_B_API.md)
 - A consumer: [PERSON_A_FRONTEND.md](./PERSON_A_FRONTEND.md)
-- Bug locus: `backend/internal/repository/conversation.go`
-- Router today: `backend/internal/router/router.go`
+- Env: [`backend/env.example`](../backend/env.example)
+- Worker: `backend/cmd/worker/main.go`
+- Router: `backend/internal/router/router.go`
