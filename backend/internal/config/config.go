@@ -105,6 +105,13 @@ type Config struct {
 	SMTPPort     int
 	SMTPUsername string
 	SMTPPassword string
+
+	FCMServerKey   string
+	APNSKeyID      string
+	APNSTeamID     string
+	APNSKeyPath    string
+	APNSBundleID   string
+	APNSProduction bool
 }
 
 func (c *Config) IsProduction() bool {
@@ -154,6 +161,13 @@ func Load() (*Config, error) {
 		SMTPHost:     getEnv("SMTP_HOST", ""),
 		SMTPUsername: getEnv("SMTP_USERNAME", ""),
 		SMTPPassword: getEnv("SMTP_PASSWORD", ""),
+
+		FCMServerKey:   getEnv("FCM_SERVER_KEY", ""),
+		APNSKeyID:      getEnv("APNS_KEY_ID", ""),
+		APNSTeamID:     getEnv("APNS_TEAM_ID", ""),
+		APNSKeyPath:    getEnv("APNS_KEY_PATH", ""),
+		APNSBundleID:   getEnv("APNS_BUNDLE_ID", ""),
+		APNSProduction: getBool("APNS_PRODUCTION", false),
 	}
 
 	var errs []error

@@ -156,6 +156,46 @@ func (s *Store) userEmail(ctx context.Context, userID uuid.UUID) (string, error)
 	return email, err
 }
 
+func (s *Store) upsertDevice(ctx context.Context, userID uuid.UUID, token, platform string) error {
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO device_tokens (user_id, token, platform)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (user_id, token) DO UPDATE
+		SET platform = EXCLUDED.platform, updated_at = now()`, userID, token, platform)
+	return err
+}
+
+func (s *Store) deleteDevice(ctx context.Context, userID uuid.UUID, token string) error {
+	_, err := s.pool.Exec(ctx, `DELETE FROM device_tokens WHERE user_id = $1 AND token = $2`, userID, token)
+	return err
+}
+
+func (s *Store) listDevices(ctx context.Context, userID uuid.UUID) ([]struct {
+	Token    string
+	Platform string
+}, error) {
+	rows, err := s.pool.Query(ctx, `SELECT token, platform FROM device_tokens WHERE user_id = $1`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []struct {
+		Token    string
+		Platform string
+	}
+	for rows.Next() {
+		var row struct {
+			Token    string
+			Platform string
+		}
+		if err := rows.Scan(&row.Token, &row.Platform); err != nil {
+			return nil, err
+		}
+		out = append(out, row)
+	}
+	return out, rows.Err()
+}
+
 func nullable(s string) *string {
 	if s == "" {
 		return nil

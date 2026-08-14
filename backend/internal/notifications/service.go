@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/bits-assignment/dating-platform/backend/internal/platform/cursor"
 	"github.com/bits-assignment/dating-platform/backend/internal/platform/email"
 	"github.com/bits-assignment/dating-platform/backend/internal/platform/events"
+	"github.com/bits-assignment/dating-platform/backend/internal/push"
 	"github.com/google/uuid"
 	goredis "github.com/redis/go-redis/v9"
 )
@@ -22,6 +24,7 @@ type Service struct {
 	mailer   email.Sender
 	cfg      Config
 	log      *slog.Logger
+	pusher   push.Pusher
 }
 
 func NewService(store *Store, redis *goredis.Client, mailer email.Sender, cfg Config, log *slog.Logger) *Service {
@@ -31,6 +34,7 @@ func NewService(store *Store, redis *goredis.Client, mailer email.Sender, cfg Co
 		mailer:   mailer,
 		cfg:      cfg,
 		log:      log,
+		pusher:   push.Nop{},
 	}
 }
 
@@ -109,7 +113,7 @@ func (s *Service) OnMatchCreated(ctx context.Context, eventID string, e events.M
 		}
 		if created {
 			s.counters.increment(ctx, recipient)
-			s.wouldPush(recipient, "It's a match")
+			s.pushToUser(ctx, recipient, "It's a match", fmt.Sprintf("You and %s liked each other.", name))
 		}
 	}
 	return nil
@@ -139,7 +143,7 @@ func (s *Service) OnMessageCreated(ctx context.Context, eventID string, e events
 	}
 	if created {
 		s.counters.increment(ctx, e.RecipientID)
-		s.wouldPush(e.RecipientID, name)
+		s.pushToUser(ctx, e.RecipientID, name, e.Preview)
 	}
 	return nil
 }
@@ -188,11 +192,45 @@ func (s *Service) OnEmailVerificationRequested(ctx context.Context, e events.Ema
 	})
 }
 
-// wouldPush is the F22 push stub: FCM/APNs is out of MVP, but the call site
-// exists so a real pusher can replace this without hunting through consumers.
-func (s *Service) wouldPush(userID uuid.UUID, title string) {
-	if s.log == nil {
+func (s *Service) RegisterDevice(ctx context.Context, userID uuid.UUID, token, platform string) error {
+	platform = strings.ToLower(strings.TrimSpace(platform))
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return fmt.Errorf("token is required")
+	}
+	switch platform {
+	case "web", "android", "ios":
+	default:
+		return fmt.Errorf("platform must be web, android or ios")
+	}
+	return s.store.upsertDevice(ctx, userID, token, platform)
+}
+
+func (s *Service) UnregisterDevice(ctx context.Context, userID uuid.UUID, token string) error {
+	return s.store.deleteDevice(ctx, userID, strings.TrimSpace(token))
+}
+
+func (s *Service) pushToUser(ctx context.Context, userID uuid.UUID, title, body string) {
+	tokens, err := s.store.listDevices(ctx, userID)
+	if err != nil {
+		if s.log != nil {
+			s.log.Warn("listing device tokens failed", "user_id", userID, "error", err)
+		}
 		return
 	}
-	s.log.Info("would push", "user_id", userID, "title", title)
+	if len(tokens) == 0 {
+		if s.log != nil {
+			s.log.Info("would push", "user_id", userID, "title", title)
+		}
+		return
+	}
+	for _, t := range tokens {
+		err := s.pusher.Push(ctx, push.Token{UserID: userID, Token: t.Token, Platform: t.Platform}, push.Note{
+			Title: title,
+			Body:  body,
+		})
+		if err != nil && s.log != nil {
+			s.log.Warn("push failed", "user_id", userID, "platform", t.Platform, "error", err)
+		}
+	}
 }

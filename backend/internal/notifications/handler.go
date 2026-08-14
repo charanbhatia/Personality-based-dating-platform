@@ -33,6 +33,8 @@ func (h *Handler) RegisterRoutes(r *mux.Router) {
 	r.HandleFunc("/notifications/unread-count", h.UnreadCount).Methods(http.MethodGet)
 	r.HandleFunc("/notifications/read-all", h.MarkAllRead).Methods(http.MethodPost)
 	r.HandleFunc("/notifications/{id}/read", h.MarkRead).Methods(http.MethodPost)
+	r.HandleFunc("/devices", h.RegisterDevice).Methods(http.MethodPost)
+	r.HandleFunc("/devices", h.UnregisterDevice).Methods(http.MethodDelete)
 }
 
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
@@ -98,6 +100,45 @@ func (h *Handler) MarkAllRead(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.svc.MarkAllRead(r.Context(), userID); err != nil {
+		h.writeServiceError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) RegisterDevice(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.user(w, r)
+	if !ok {
+		return
+	}
+	var req struct {
+		Token    string `json:"token"`
+		Platform string `json:"platform"`
+	}
+	if err := httpx.ReadJSON(r, &req); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, httpx.CodeBadRequest, "invalid body")
+		return
+	}
+	if err := h.svc.RegisterDevice(r.Context(), userID, req.Token, req.Platform); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) UnregisterDevice(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.user(w, r)
+	if !ok {
+		return
+	}
+	var req struct {
+		Token string `json:"token"`
+	}
+	if err := httpx.ReadJSON(r, &req); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, httpx.CodeBadRequest, "invalid body")
+		return
+	}
+	if err := h.svc.UnregisterDevice(r.Context(), userID, req.Token); err != nil {
 		h.writeServiceError(w, r, err)
 		return
 	}
