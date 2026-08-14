@@ -15,6 +15,15 @@ export function isScored(score) {
   return typeof score === 'number' && score !== UNSCORED;
 }
 
+// The band's colour is information, not decoration: closest reads teal,
+// middling reads brand pink, thin reads muted.
+export function bandTone(score) {
+  if (!isScored(score)) return 'tone-none';
+  if (score >= 0.85) return 'tone-high';
+  if (score >= 0.75) return 'tone-mid';
+  return 'tone-low';
+}
+
 export function band(score) {
   if (!isScored(score)) return 'Not scored yet';
   if (score >= 0.85) return 'Unusually close';

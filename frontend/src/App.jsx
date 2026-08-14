@@ -16,6 +16,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import useRouteMeta from './hooks/useRouteMeta';
 import {
   IconUser,
+  IconCompass,
   IconHeart,
   IconChat,
   IconLogout,
@@ -23,6 +24,7 @@ import {
 } from './components/Icons';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
+import Dashboard from './pages/Dashboard';
 import './App.css';
 
 // Landing and Login are the first-paint entry points, so they stay eager.
@@ -75,7 +77,8 @@ function backTarget(pathname) {
   if (pathname.startsWith('/app/conversations/'))
     return { to: '/app/conversations', label: 'Back to messages' };
   if (pathname.startsWith('/app/matches/')) return { to: '/app/matches', label: 'Back to matches' };
-  return null;
+  if (pathname === '/app') return null;
+  return { to: '/app', label: 'Back to home' };
 }
 
 function Layout() {
@@ -95,6 +98,10 @@ function Layout() {
       <header className="app-header">
         <Brand to="/app" />
         <nav className="header-nav">
+          <NavLink to="/app" end className="nav-item">
+            <IconCompass />
+            <span>Home</span>
+          </NavLink>
           <NavLink to="/app/matches" className="nav-item">
             <IconHeart />
             <span>Matches</span>
@@ -161,7 +168,7 @@ function AppRoutes() {
           <Route path="/register" element={<PublicOnly><Register /></PublicOnly>} />
 
           <Route path="/app" element={<ProtectedLayout />}>
-            <Route index element={<Navigate to="matches" replace />} />
+            <Route index element={<Dashboard />} />
             <Route path="profile" element={<Profile />} />
             <Route path="matches" element={<Matches />} />
             <Route path="matches/:id" element={<MatchDetail />} />

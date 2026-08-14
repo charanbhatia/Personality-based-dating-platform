@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 
 /**
  * Circular compatibility gauge. By default the stroke sweeps up from zero the
@@ -13,13 +13,16 @@ import { useEffect, useRef, useState } from 'react';
 export default function CompatibilityRing({
   value = 0,
   size = 92,
-  stroke = 6,
+  stroke = 8,
   label = 'match',
   animateOnView = true,
 }) {
   const pct = Math.max(0, Math.min(100, Math.round(value)));
   const [revealed, setRevealed] = useState(!animateOnView);
   const ref = useRef(null);
+  // Keyed on size, every card in a grid emitted the same id and they all
+  // resolved to the first gradient in the document.
+  const gradId = useId();
 
   const shown = revealed ? pct : 0;
   const r = (size - stroke) / 2;
@@ -43,13 +46,18 @@ export default function CompatibilityRing({
     return () => io.disconnect();
   }, [revealed]);
 
-  // A flat band, not a gradient: the colour carries meaning, so it should be
-  // readable as one of three states rather than a decorative sweep.
-  const tone = pct >= 80 ? 'var(--good)' : pct >= 60 ? 'var(--accent)' : 'var(--ink-mute)';
+  const tone = pct >= 80 ? 'var(--teal)' : pct >= 60 ? 'var(--accent)' : 'var(--violet)';
 
   return (
     <div ref={ref} className="ring" style={{ width: size, height: size }}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
+        <defs>
+          <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#c9245f" />
+            <stop offset="55%" stopColor="#6b4ee6" />
+            <stop offset="100%" stopColor="#0e7c6b" />
+          </linearGradient>
+        </defs>
         <circle
           cx={size / 2}
           cy={size / 2}
@@ -63,21 +71,21 @@ export default function CompatibilityRing({
           cy={size / 2}
           r={r}
           fill="none"
-          stroke={tone}
+          stroke={`url(#${gradId})`}
           strokeWidth={stroke}
-          strokeLinecap="butt"
+          strokeLinecap="round"
           strokeDasharray={c}
           strokeDashoffset={offset}
           transform={`rotate(-90 ${size / 2} ${size / 2})`}
-          style={{ transition: 'stroke-dashoffset 0.7s cubic-bezier(0.22,1,0.36,1)' }}
+          style={{ transition: 'stroke-dashoffset 1.2s cubic-bezier(0.22,1,0.36,1)' }}
         />
       </svg>
       <div className="ring-center">
-        <span className="ring-value" style={{ fontSize: size < 70 ? '0.95rem' : undefined }}>
+        <span className="ring-value" style={{ color: tone }}>
           {shown}
           <i>%</i>
         </span>
-        {label && size >= 70 && <span className="ring-label">{label}</span>}
+        <span className="ring-label">{label}</span>
       </div>
     </div>
   );

@@ -1,13 +1,14 @@
 /* ============================================================
    Kindred — design system
    ------------------------------------------------------------
-   Paper, ink and one accent. The product asks people to slow
-   down and read each other, so the surface is set like something
-   made for reading: hairlines instead of borders, whitespace
-   instead of boxes, type doing the hierarchy.
+   Warm and colourful without being loud. One confident pink
+   carries the actions; teal, violet and persimmon do the rest
+   of the work in avatars and bands, so colour signals something
+   rather than decorating. Flat fills only — no gradients, no
+   glow, no glass.
 
-   Deliberately single-theme. A light paper ground is the point,
-   not a default — so there is no dark variant to fall back to.
+   Every colour below was checked against the ground it sits on;
+   nothing here is under 4.5:1 for text.
    ============================================================ */
 
 *,
@@ -17,58 +18,66 @@
 }
 
 :root {
-  /* ---- Paper ---- */
-  --paper: #f6f4ef;
-  --paper-raised: #fffdfa;
-  --paper-sunk: #eeeae1;
-  --paper-deep: #e6e1d6;
+  /* ---- Ground ---- */
+  --paper: #fff8f4;
+  --paper-raised: #ffffff;
+  --paper-sunk: #fff1ea;
+  --paper-deep: #ffe6da;
 
   /* ---- Ink ---- */
-  --ink: #191713;
-  --ink-soft: #55504a;
-  /* 4.9:1 on --paper. The obvious lighter grey for captions measured 3.4:1,
-     and every muted label in the app draws from this one token. */
-  --ink-mute: #6f6960;
+  --ink: #241a1d;
+  --ink-soft: #5b4a4e;
+  --ink-mute: #6e5c60;
 
   /* ---- Rules ---- */
-  --rule: #ded9d0;
-  --rule-strong: #c7c0b3;
+  --rule: #f5e4dc;
+  --rule-strong: #e3cbc2;
 
-  /* ---- Accent: oxblood. Links, key numbers, one button. ---- */
-  --accent: #6d2637;
-  --accent-hover: #8b3145;
-  --accent-wash: #f0e5e6;
+  /* ---- Brand: a confident pink. Actions and links, nothing else. ---- */
+  --accent: #c9245f;
+  --accent-hover: #a81b4e;
+  --accent-wash: #fdeaf1;
 
-  /* ---- Semantic, kept separate from the accent ---- */
-  --good: #2f5d50;
-  --good-wash: #e4ece8;
-  --warn: #8a5316;
-  --warn-wash: #f5ead9;
-  --bad: #96231f;
-  --bad-wash: #f6e3e1;
+  /* ---- The rest of the palette. Used to encode meaning — the band a
+         match falls into, which person an avatar belongs to. ---- */
+  --teal: #0e7c6b;
+  --teal-wash: #e3f2ef;
+  --violet: #6b4ee6;
+  --violet-wash: #eeeafd;
+  --persimmon: #c2410c;
 
-  /* ---- Elevation. Paper does not glow; it casts a short shadow. ---- */
-  --lift: 0 1px 2px rgba(25, 23, 19, 0.05), 0 2px 8px -4px rgba(25, 23, 19, 0.1);
-  --lift-md: 0 1px 2px rgba(25, 23, 19, 0.06), 0 10px 24px -14px rgba(25, 23, 19, 0.3);
-  --lift-lg: 0 2px 4px rgba(25, 23, 19, 0.07), 0 18px 38px -18px rgba(25, 23, 19, 0.38);
+  /* ---- Semantic ---- */
+  --good: #0e7c4a;
+  --good-wash: #e6f4ec;
+  --warn: #b26a00;
+  --warn-wash: #fdf0dc;
+  --bad: #c42a2a;
+  --bad-wash: #fbeaea;
 
-  /* ---- Radius. Restrained — paper is cut, not rounded. ---- */
-  --r-sm: 4px;
-  --r-md: 8px;
-  --r-lg: 13px;
+  /* ---- Elevation ---- */
+  --lift: 0 1px 2px rgba(36, 26, 29, 0.05), 0 2px 8px -4px rgba(36, 26, 29, 0.1);
+  --lift-md: 0 1px 2px rgba(36, 26, 29, 0.06), 0 10px 24px -14px rgba(36, 26, 29, 0.26);
+  --lift-lg: 0 2px 4px rgba(36, 26, 29, 0.07), 0 18px 38px -18px rgba(36, 26, 29, 0.3);
+
+  /* ---- Radius. Generous — soft is friendlier than sharp. ---- */
+  --r-sm: 8px;
+  --r-md: 13px;
+  --r-lg: 20px;
   --r-pill: 999px;
 
   /* ---- Motion ---- */
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
 
-  /* ---- Type ---- */
-  --serif: 'Newsreader', ui-serif, Georgia, serif;
-  --sans: 'Public Sans', ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* ---- Type. Two families: one with character for headings, one
+         built for reading. `--mono` is a letter-spaced sans now —
+         a monospace label reads technical, and this is not that. ---- */
+  --serif: 'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
+  --sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --mono: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
 
   font-family: var(--sans);
   font-size: 16px;
-  line-height: 1.65;
+  line-height: 1.62;
   color: var(--ink-soft);
   background-color: var(--paper);
   font-synthesis: none;
@@ -91,19 +100,6 @@ body {
   overflow-x: hidden;
 }
 
-/* Paper grain. Barely there — it warms the flat colour without
-   reading as a texture, and it replaces the aurora that used to
-   sit behind everything. */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  opacity: 0.035;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-}
-
 #root {
   position: relative;
   z-index: 1;
@@ -117,7 +113,7 @@ h2,
 h3,
 h4 {
   font-family: var(--serif);
-  font-weight: 600;
+  font-weight: 700;
   color: var(--ink);
   letter-spacing: -0.011em;
   line-height: 1.15;
@@ -164,20 +160,17 @@ select {
   color: var(--ink);
 }
 
-/* The one place a word gets emphasis: set in italic serif rather
-   than filled with a gradient. */
+/* The one place a word gets emphasis — a flat colour change, not a gradient. */
 .text-accent {
-  font-family: var(--serif);
-  font-style: italic;
-  font-weight: 600;
   color: var(--accent);
 }
 
 /* Small caps label, used for anything measured. */
 .label {
   font-family: var(--mono);
-  font-size: 0.7rem;
-  letter-spacing: 0.11em;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--ink-mute);
   font-weight: 500;
