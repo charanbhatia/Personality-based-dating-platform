@@ -1,10 +1,10 @@
 // Package cache defines the small key/value port the matching domain uses for
-// trait lookups, plus two implementations that need no infrastructure.
+// trait lookups.
 //
-// Person C owns Redis (platform/redis). When their client lands, pass an adapter
-// satisfying Cache and nothing in the domain changes. Memory is the default so a
-// single API replica still gets the M2 trait cache; it is process-local, so TTLs
-// are kept short enough that a stale read after a retake self-heals quickly.
+// Memory is the default when Redis is not configured. When a Redis client is
+// passed to app.New, cache.Redis is used so every replica sees the same trait
+// vectors. The cache is never load-bearing: a miss or a Redis error falls back
+// to Postgres.
 package cache
 
 import (
