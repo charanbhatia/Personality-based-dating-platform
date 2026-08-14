@@ -17,15 +17,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-const matchesDDL = `CREATE TABLE IF NOT EXISTS matches (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_a_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    user_b_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE (user_a_id, user_b_id),
-    CHECK (user_a_id < user_b_id)
-)`
-
 // recordingPublisher captures emitted events so tests can assert the contract
 // other domains consume.
 type recordingPublisher struct {
@@ -55,22 +46,30 @@ func newServiceWithPublisher(pool *pgxpool.Pool, gateEnabled bool, pub Publisher
 	}, pub, slog.New(slog.NewTextHandler(io.Discard, nil)))
 }
 
-// dropMatches removes Person B's table so the gate's "not shipped yet"
-// behaviour can be exercised deterministically.
-func dropMatches(t *testing.T, pool *pgxpool.Pool) {
+// hideMatchesTable makes matches temporarily unresolvable so the gate's
+// "not shipped yet" fallback can be exercised. The table is renamed rather
+// than dropped: it is owned by a migration, and dropping it would take the
+// conversations foreign key with it and leave orphaned rows behind.
+func hideMatchesTable(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
-	if _, err := pool.Exec(context.Background(), "DROP TABLE IF EXISTS matches CASCADE"); err != nil {
-		t.Fatalf("drop matches: %v", err)
+	ctx := context.Background()
+
+	if _, err := pool.Exec(ctx, "ALTER TABLE matches RENAME TO matches_hidden"); err != nil {
+		t.Fatalf("hide matches: %v", err)
 	}
+	t.Cleanup(func() {
+		if _, err := pool.Exec(context.Background(), "ALTER TABLE matches_hidden RENAME TO matches"); err != nil {
+			t.Fatalf("restore matches: %v", err)
+		}
+	})
 }
 
-// createMatch simulates Person B's matches table landing.
+// createMatch inserts into the matches table owned by the matching domain.
 func createMatch(t *testing.T, pool *pgxpool.Pool, a, b uuid.UUID) uuid.UUID {
 	t.Helper()
 	ctx := context.Background()
-	if _, err := pool.Exec(ctx, matchesDDL); err != nil {
-		t.Fatalf("create matches table: %v", err)
-	}
+
+	// The table constrains the pair to canonical order.
 	if a.String() > b.String() {
 		a, b = b, a
 	}
@@ -80,7 +79,6 @@ func createMatch(t *testing.T, pool *pgxpool.Pool, a, b uuid.UUID) uuid.UUID {
 	if err != nil {
 		t.Fatalf("insert match: %v", err)
 	}
-	t.Cleanup(func() { dropMatches(t, pool) })
 	return id
 }
 
@@ -134,7 +132,7 @@ func TestOpenByMatchIsIdempotent(t *testing.T) {
 
 func TestOpenByMatchReportsWhenMatchesTableIsMissing(t *testing.T) {
 	pool := testdb.New(t)
-	dropMatches(t, pool)
+	hideMatchesTable(t, pool)
 	svc := newService(pool, true)
 
 	alice := testdb.CreateUser(t, pool, "alice@example.com", "Alice")
@@ -178,16 +176,7 @@ func TestBlockedUsersCannotOpenOrUseConversations(t *testing.T) {
 		t.Fatalf("open: %v", err)
 	}
 
-	// Person B's blocks table, created here to verify the gate reads it.
-	_, err = pool.Exec(ctx, `CREATE TABLE IF NOT EXISTS blocks (
-	    blocker_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-	    blocked_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-	    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-	    PRIMARY KEY (blocker_id, blocked_id))`)
-	if err != nil {
-		t.Fatalf("create blocks: %v", err)
-	}
-
+	// blocks is owned by a migration; the gate only reads it.
 	if _, err := pool.Exec(ctx, `INSERT INTO blocks (blocker_id, blocked_id) VALUES ($1, $2)`, bob, alice); err != nil {
 		t.Fatalf("insert block: %v", err)
 	}

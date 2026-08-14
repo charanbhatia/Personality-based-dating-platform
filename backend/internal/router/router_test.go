@@ -356,4 +356,3 @@ func TestWebSocketRejectsMissingToken(t *testing.T) {
 		t.Errorf("GET /ws without a token = %d, want 401", rec.Code)
 	}
 }
-
