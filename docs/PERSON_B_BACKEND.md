@@ -181,6 +181,8 @@ Migration files: `002_b_auth_sessions.sql`, `003_b_personality_questions.sql`, `
 | GET | `/api/v1/auth/me` | Access | User + onboarding flags |
 | POST | `/api/v1/auth/password/forgot` | No | Always 202; enqueue email event |
 | POST | `/api/v1/auth/password/reset` | No | token + new password |
+| POST | `/api/v1/auth/email/verify` | No | token; sets `email_verified_at` |
+| POST | `/api/v1/auth/email/resend` | Access | new confirmation token |
 | GET | `/api/v1/auth/sessions` | Access | List sessions |
 | DELETE | `/api/v1/auth/sessions/:id` | Access | Revoke |
 
@@ -188,7 +190,7 @@ Migration files: `002_b_auth_sessions.sql`, `003_b_personality_questions.sql`, `
 
 - **Access:** JWT, 15 minutes, claims `typ=access`, `user_id`, `sid`
 - **Refresh:** opaque random (32+ bytes) stored **hashed** in `auth_sessions`, 30 days; rotate on use
-- Optional: also cache session revoke list in Redis (C) for fast logout propagation — call `platform/redis`
+- Optional: also cache session revoke list in Redis (C) for fast logout propagation — call `platform/redis`. **Not implemented.** Logout revokes the refresh session immediately; the access JWT is short-lived (15m) and is not denylisted.
 
 #### `/me` response
 
@@ -297,6 +299,10 @@ Body:
 ```
 
 `preferences_done` = age range set + at least one gender (define clearly in code).
+
+`max_distance_km` is accepted and stored so the UI can collect it. It is **not**
+applied to discovery (see package comment on `internal/preferences`). Trait
+weights **are** applied as a weighted average in the discover SQL.
 
 ---
 
@@ -473,6 +479,28 @@ Two details worth knowing before adding integration tests:
 Implemented endpoints and their exact contracts are in
 [PERSON_B_API.md](./PERSON_B_API.md).
 
+### Spec coverage (required vs optional)
+
+| Spec item | Status |
+|-----------|--------|
+| F01–F04 auth (access + refresh rotation/reuse, logout, sessions) | Required — done |
+| F03 password reset (hashed token, 202 forgot, revoke all sessions) | Required — done |
+| Email verification (`/auth/email/verify`, `/auth/email/resend`) | Required leftover — done; login is **not** gated |
+| F05 profile CRUD + F16 no email on public/discover/match DTOs | Required — done |
+| F06 photos: HTTPS URLs **and** C `asset_ids` | Required — done |
+| F07–F08 quiz, 0–1 traits, 30-day retake, cache invalidate | Required — done |
+| F09 prefs: age, gender, **trait_weights applied in SQL scoring** | Required — done |
+| F09 `max_distance_km` | **Optional / deferred** — stored + returned; `DistanceFilterActive: false`; not in discover SQL (M2 decision) |
+| F10–F13 discover SQL prefilter, score sort, cursor, likes, mutual match, outbox | Required — done |
+| F14–F15 block/report + `user.blocked` | Required — done |
+| Redis `sess:{sid}` access-token denylist | **Optional** — not built; logout revokes refresh immediately; access JWT dies at expiry (~15m) |
+| `discover:prefetch:{user_id}` | **Optional** — not built; trait cache is the M2 cache |
+| `Idempotency-Key` on likes | Roadmap “recommended M3” — CORS allows the header; swipe uniqueness is the idempotency key |
+| Auth rate limit on **v1** register/login/forgot/refresh/verify | Required (C F24) — wired; no-op without `REDIS_URL` (fail-closed when Redis is up and errors) |
+| M4 load-test / explain-analyze / cache-hit metrics | **Deferred M4** |
+
+Error handling that is intentional, not a gap: forgot-password always 202; login uses one `invalid_credentials` and burns a bcrypt compare on unknown emails; cross-account session ids and blocked public profiles are 404 not 403; self-like/block/report are 422; unexpected errors are generic 500.
+
 ### M1
 
 - [x] `/api/v1/auth/*` access + refresh + logout + me flags — rotation with reuse
@@ -495,12 +523,10 @@ Implemented endpoints and their exact contracts are in
       concurrent mutual likes create exactly one match and one event
 - [x] Match list
 - [x] Profile photos gallery with URL safety rules
-- [ ] Profile photos integration with C URLs — C's media service is on the
-      merge branch; PUT `/profile/photos` with `asset_ids` still returns
-      `501 media_unavailable` until `app.Options.Media` is wired to C's resolver
-- [ ] Trait Redis cache — C's Redis client exists. The `cache.Cache` port still
-      uses the in-process LRU; swapping in a Redis implementation is a one-line
-      change in `internal/app`
+- [x] Profile photos integration with C URLs — `PUT /profile/photos` with
+      `asset_ids` resolves owned, ready media assets through C's media service
+- [x] Trait Redis cache — `cache.Redis` is used when `REDIS_URL` is set;
+      otherwise the in-process TTL cache
 - [x] Integration tests for match path
 
 ### M3
@@ -509,6 +535,8 @@ Implemented endpoints and their exact contracts are in
 - [x] Retake rules — interval enforced, cache invalidated on retake
 - [x] Password reset full path with C email stub — emits
       `auth.password_reset_requested`; C's mailer consumes it
+- [x] Email verification — register emits `auth.email_verification_requested`;
+      `POST /auth/email/verify` and authenticated resend; login is not gated
 - [ ] Query/index tuning from explain analyze — indexes are in place from the
       migrations, but not yet validated against a realistic data volume
 

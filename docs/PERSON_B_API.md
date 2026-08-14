@@ -16,7 +16,8 @@ so treat a disagreement between this document and the code as a bug in one of th
 documented in §9, but they are deprecated.
 
 **Authentication.** `Authorization: Bearer <access_token>` on every endpoint
-except `/health`, register, login, refresh and the two password-reset endpoints.
+except `/health`, register, login, refresh, the two password-reset endpoints
+and `POST /auth/email/verify`.
 
 **Content type.** Request bodies must be JSON. A `Content-Type` header is
 optional, but if present it must be `application/json` (a charset parameter is
@@ -42,6 +43,7 @@ failures and maps field name to the first problem found with it.
 | `refresh_token_invalid` | 401 | Unknown, expired or revoked refresh token |
 | `refresh_token_reused` | 401 | Replay detected; the session was revoked |
 | `reset_token_invalid` | 400 | Unknown, expired or already-used reset token |
+| `verify_token_invalid` | 400 | Unknown, expired or already-used email verification token |
 | `forbidden` | 403 | Authenticated but not permitted |
 | `not_found` | 404 | No such resource, or one hidden from this caller |
 | `conflict` | 409 | State collision |
@@ -49,10 +51,11 @@ failures and maps field name to the first problem found with it.
 | `retake_too_soon` | 409 | Assessment retake window has not elapsed |
 | `blocked_by_you` | 409 | Unblock the user before interacting |
 | `assessment_required` | 409 | Take the personality assessment first |
+| `asset_not_ready` | 409 | Photo `asset_ids` refer to an upload that has not finished processing |
 | `cannot_swipe_self` / `cannot_block_self` / `cannot_report_self` | 422 | Self-targeted action |
 | `invalid_action` | 422 | Swipe action outside `like` / `pass` |
 | `underage` | 422 | Date of birth below the minimum age |
-| `media_unavailable` | 501 | Photo asset ids need Person C's media service |
+| `media_unavailable` | 501 | Photo asset ids submitted but the media service is not wired |
 | `method_not_allowed` | 405 | Wrong verb; the `Allow` header lists the right ones |
 | `unsupported_media_type` | 415 | `Content-Type` was not JSON |
 | `payload_too_large` | 413 | Body over 1 MiB |
@@ -100,6 +103,9 @@ Response — and the response to login and refresh — is:
 ```
 
 Errors: `422` for any invalid field, `409 email_already_registered`.
+
+Registration also enqueues `auth.email_verification_requested`. Login is **not**
+gated on `email_verified`; the flag on `/auth/me` is for the UI.
 
 ### `POST /auth/login` → 200
 
@@ -179,10 +185,23 @@ Always 202, whether or not the account exists. Emits
 { "token": "opaque", "password": "a new password" }
 ```
 
-Tokens are single-use and expire (`PASSWORD_RESET_TTL`, default 1h). A successful
-reset revokes every session, so all devices must sign in again.
+Unknown, expired or already-used tokens are `400 reset_token_invalid`. Tokens
+expire after `PASSWORD_RESET_TTL` (default 1h). A successful reset revokes every
+session, so all devices must sign in again. A password that fails policy is `422`.
 
-Errors: `400 reset_token_invalid`, `422` for a password failing policy.
+### `POST /auth/email/verify` → 204
+
+```json
+{ "token": "opaque" }
+```
+
+Marks `email_verified` true. Unknown, expired or already-used tokens are
+`400 verify_token_invalid`. Login still works without this step.
+
+### `POST /auth/email/resend` → 202
+
+Authenticated. Issues a new token and retires the previous one. Already-verified
+accounts are a silent no-op so the endpoint cannot be used to spam the inbox.
 
 ---
 
@@ -234,8 +253,10 @@ hosts, and same-origin absolute paths (`/media/...`). Rejected: any other scheme
 protocol-relative (`//host/x.jpg`) URLs, because these end up in an `<img src>`.
 Blank entries are dropped.
 
-Sending `asset_ids` instead returns `501 media_unavailable` until Person C's media
-service exists.
+Sending `asset_ids` instead of `photo_urls` resolves Person C's media assets to
+public URLs. Each id must be owned by the caller and `ready`; otherwise the
+request is `404 not_found` or `409 asset_not_ready`. HTTPS URLs still work for
+seed data and local development.
 
 ### `GET /users/{id}/public` → 200
 

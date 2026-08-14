@@ -33,7 +33,7 @@ This document is your full playbook: current gaps (including known bugs), featur
 
 **Now shipped (do not treat the table as current):** match-gated `/api/v1/conversations`, WebSocket at `GET /ws` with Redis fanout, media presign + thumbnail worker, notifications inbox + unread counters, Redis Streams queue + `cmd/worker`, Compose (Postgres/Redis/MinIO/Mailhog/api/worker), CI, `/healthz` `/readyz` `/metrics`, request ID + W3C trace context, rate limits. The `ListByUserID` double-bind bug is fixed and covered by `repository/conversation_test.go`.
 
-SQL for C domains is `009_c_messaging.sql`, `010_c_media.sql`, `011_c_notifications.sql` so it runs **after** B's `matches` table (`006_b_matching.sql`). Do not renumber back to `005_c`–`007_c`.
+SQL for C domains is `009_c_messaging.sql`, `010_c_media.sql`, `011_c_notifications.sql` so it runs **after** B's `matches` table (`006_b_matching.sql`). B's `012_b_email_verification.sql` follows C's tables. Do not renumber C's files back to `005_c`–`007_c`.
 
 ---
 
@@ -354,6 +354,7 @@ CREATE INDEX idx_notifications_user_created ON notifications(user_id, created_at
 | `match.created` | Insert notification for **both** users; bump Redis unread; optional email |
 | `message.created` | Notify **recipient** only; skip if active WS on that conversation (optimization M4) |
 | `auth.password_reset_requested` | Send email (or log in `EMAIL_MODE=log`) |
+| `auth.email_verification_requested` | Send confirmation email (or log in `EMAIL_MODE=log`) |
 
 Push notifications (FCM/APNs): **stub interface** only in MVP — log “would push”.
 
@@ -452,12 +453,37 @@ Publish a short `docs/RUNBOOK_LOADTEST.md` in M4 (you author).
 
 ## 11. Milestone checklist (C)
 
+### Spec coverage (required vs optional)
+
+| Spec item | Status |
+|-----------|--------|
+| F23 `/healthz` `/readyz` `/metrics` | Required — done. Empty `REDIS_URL`: ready if Postgres is up, Redis reported `disabled` |
+| F24 request ID, structured logs, CORS allowlist, recover | Required — done. Production refuses empty CORS **and** `*` |
+| F24 stricter auth rate limits | Required — done on **v1 and legacy** register/login/forgot/refresh/verify. No-op without Redis |
+| F25 Prometheus metrics + W3C `traceparent` | Required M3 — done. Full OTLP exporter is **M4** |
+| F26 Compose (Postgres, Redis, MinIO, Mailhog, api, worker) | Required — done (`make up`). README still emphasises local `go run` |
+| F27 CI `go test` + `go vet` + frontend build | Required — done. golangci-lint and compose smoke are **optional** and not in CI |
+| F17–F18 match-gated REST, inbox peer DTO, cursor, `client_msg_id`, `/read` | Required — done |
+| `user.blocked` hide thread | Required — **synchronous**: send/subscribe 403; inbox omits blocked peers. No extra queue consumer (monolith reads `blocks`) |
+| F19 WS `/ws` Bearer + `?access_token=`, Redis fanout, ping/pong | Required — done |
+| Skip notify if recipient has an active WS | **M4 optimization** — not built; every message still inserts an inbox row |
+| F20 presign + complete + worker thumb + `media.processed` | Required — done. Keys use `public/users/...` so thumbs are anonymously readable. 503 without S3 |
+| B attaching photos | Required — B `PUT /profile/photos` resolves `asset_ids`; does not subscribe to `media.processed` |
+| F21 notifications API + match/message consumers + unread Redis | Required — done; idempotent on `event_id` |
+| F22 email stub | Required — done (`EMAIL_MODE=log` or SMTP) including email verification |
+| F22 push (FCM/APNs) | Stub only — logs `would push` |
+| Unknown queue events | Ack, do not retry |
+| Legacy `/api/conversations` | Deprecated shim — **not** match-gated; v1 is the contract |
+| M4 two-replica demo doc, load numbers, ops runbooks | **Deferred M4** |
+
+Error handling that is intentional: match missing → 404; not a participant → 403; legacy `{user_id}` while the gate is on → 400; media wrong owner → 403; unknown media id → 404; storage down → 503; rate limit → 429; Redis down on **auth** limits → 503 (fail-closed); Redis down on general API limits → fail-open.
+
 ### M1
 
 - [x] `platform/` package: config, redis, middleware, logging, queue, metrics
 - [x] `/healthz`, `/readyz` (and `/health` kept for the current SPA)
 - [x] Docker Compose: Postgres, Redis, MinIO, Mailhog, api, worker
-- [x] Rate limit on auth routes (Redis; no-op without `REDIS_URL`; fail-closed on auth)
+- [x] Rate limit on auth routes (Redis; no-op without `REDIS_URL`; fail-closed on auth; v1 **and** legacy)
 - [x] CORS allowlist (`CORS_ALLOWED_ORIGINS` / `CORS_ORIGINS`)
 - [x] `env.example` updated — merged with B's auth/outbox knobs
 - [x] Fix conversation `ListByUserID` bug + test
@@ -474,9 +500,10 @@ Publish a short `docs/RUNBOOK_LOADTEST.md` in M4 (you author).
 
 - [x] WebSocket gateway + Redis fanout (`GET /ws`)
 - [x] Notifications API + consumers for match/message (`011_c_notifications.sql`)
-- [x] Email stub for password reset (`EMAIL_MODE=log` or SMTP/Mailhog)
+- [x] Email stub for password reset **and** email verification (`EMAIL_MODE=log` or SMTP/Mailhog)
 - [x] Prometheus `/metrics` + W3C `traceparent` on requests (full OTLP exporter still M4)
 - [x] Unread counters
+- [x] Push stub logs `would push` (no FCM/APNs in MVP)
 
 ### M4
 
