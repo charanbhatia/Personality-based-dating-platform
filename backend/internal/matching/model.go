@@ -3,6 +3,7 @@ package matching
 import (
 	"time"
 
+	"github.com/bits-assignment/dating-platform/backend/internal/domain"
 	"github.com/bits-assignment/dating-platform/backend/internal/profile"
 	"github.com/google/uuid"
 )
@@ -30,7 +31,8 @@ const MaxReportDetailRunes = 1000
 // profile shape, so no candidate payload can carry an email (roadmap F16).
 type DiscoverItem struct {
 	profile.PublicProfile
-	CompatibilityScore float64 `json:"compatibility_score"`
+	CompatibilityScore float64       `json:"compatibility_score"`
+	Traits             domain.Traits `json:"traits,omitempty"`
 }
 
 // Page is the cursor-paginated envelope from roadmap §6.

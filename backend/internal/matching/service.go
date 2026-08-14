@@ -159,6 +159,18 @@ func (s *Service) Discover(ctx context.Context, viewerID uuid.UUID, rawCursor st
 		return nil, httpx.Internal(fmt.Errorf("load preferences: %w", err))
 	}
 
+	if prefs != nil && prefs.MaxDistanceKM != nil {
+		lat, lng, coordErr := s.repo.Coords(ctx, s.pool, viewerID)
+		if coordErr != nil {
+			return nil, httpx.Internal(fmt.Errorf("load viewer coordinates: %w", coordErr))
+		}
+		if lat != nil && lng != nil {
+			query.ViewerLat = lat
+			query.ViewerLng = lng
+			query.MaxDistanceKM = prefs.MaxDistanceKM
+		}
+	}
+
 	candidates, err := s.repo.Discover(ctx, s.pool, query)
 	if err != nil {
 		return nil, httpx.Internal(err)
@@ -186,6 +198,7 @@ func (s *Service) Discover(ctx context.Context, viewerID uuid.UUID, rawCursor st
 				IsMatched: false,
 			},
 			CompatibilityScore: c.Score,
+			Traits:             c.Traits,
 		}
 		page.Items = append(page.Items, item)
 	}

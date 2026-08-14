@@ -85,10 +85,8 @@ func TestUpdatePreferencesRoundTrips(t *testing.T) {
 	if !saved.Complete {
 		t.Error("complete = false after setting an age range and genders")
 	}
-	// Distance is stored for the UI but not yet applied by discovery; saying so
-	// keeps the client from claiming a filter that does not exist.
-	if saved.DistanceFilterActive {
-		t.Error("distance_filter_active = true, but discovery does not filter by distance yet")
+	if !saved.DistanceFilterActive {
+		t.Error("distance_filter_active = false after setting max_distance_km")
 	}
 
 	if fetched := getPreferences(t, u); fetched.TraitWeights[domain.TraitOpenness] != 2.5 {

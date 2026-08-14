@@ -23,6 +23,23 @@ func TestDiscoverRequiresAnAssessment(t *testing.T) {
 	do(t, http.MethodGet, "/api/v1/discover", u.Token, nil).requireStatus(t, http.StatusOK)
 }
 
+func TestDiscoverIncludesCandidateTraits(t *testing.T) {
+	resetDB(t)
+	viewer := onboard(t, onboardOptions{Name: "Viewer"})
+	onboard(t, onboardOptions{Name: "Ada"})
+
+	page := discover(t, viewer, "")
+	if len(page.Items) == 0 {
+		t.Fatal("feed is empty")
+	}
+	item := page.Items[0]
+	for _, k := range domain.TraitKeys() {
+		if _, ok := item.Traits[k]; !ok {
+			t.Errorf("discover card is missing trait %q: %#v", k, item.Traits)
+		}
+	}
+}
+
 func TestDiscoverExcludesSelf(t *testing.T) {
 	resetDB(t)
 	viewer := onboard(t, onboardOptions{Name: "Viewer"})

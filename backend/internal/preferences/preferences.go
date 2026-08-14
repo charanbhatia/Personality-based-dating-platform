@@ -1,9 +1,8 @@
 // Package preferences owns the discovery filter settings (roadmap F09).
 //
-// Distance filtering is deliberately not implemented: the M2 decision recorded in
-// the person-B spec is to ship age, gender and trait weights first and defer geo.
-// max_distance_km is persisted and returned so the frontend can collect it, and
-// the API reports that it is not yet applied.
+// Age, gender, trait weights and max_distance_km are all applied. Distance
+// filtering uses profile lat/lng; if the viewer has no coordinates the distance
+// preference is stored but not used until they share a location.
 package preferences
 
 import (
@@ -60,8 +59,8 @@ type DTO struct {
 	MaxDistanceKM *int                `json:"max_distance_km"`
 	TraitWeights  domain.TraitWeights `json:"trait_weights"`
 	Complete      bool                `json:"complete"`
-	// DistanceFilterActive tells the client that max_distance_km is stored but not
-	// yet used for filtering, so the UI can label it accurately.
+	// DistanceFilterActive is true when max_distance_km is set. Discovery applies
+	// it once the viewer has profile coordinates.
 	DistanceFilterActive bool      `json:"distance_filter_active"`
 	UpdatedAt            time.Time `json:"updated_at"`
 }
@@ -78,7 +77,7 @@ func toDTO(p *Preferences) *DTO {
 		MaxDistanceKM:        p.MaxDistanceKM,
 		TraitWeights:         p.TraitWeights,
 		Complete:             p.Complete(),
-		DistanceFilterActive: false,
+		DistanceFilterActive: p.MaxDistanceKM != nil,
 		UpdatedAt:            p.UpdatedAt,
 	}
 }

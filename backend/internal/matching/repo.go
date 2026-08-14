@@ -38,6 +38,7 @@ WITH scored AS (
         p.interests     AS interests,
         p.photo_urls    AS photo_urls,
         coalesce(p.primary_photo_url, '') AS primary_photo_url,
+        ps.traits       AS traits,
         round(
             ((  $7::float8  * (1 - abs($2::float8 - (ps.traits->>'openness')::float8))
               + $8::float8  * (1 - abs($3::float8 - (ps.traits->>'conscientiousness')::float8))
@@ -72,9 +73,20 @@ WITH scored AS (
       AND (coalesce(array_length($14::text[], 1), 0) = 0 OR p.gender = ANY ($14::text[]))
       AND ($12::int IS NULL OR u.date_of_birth <= (current_date - make_interval(years => $12::int)))
       AND ($13::int IS NULL OR u.date_of_birth >  (current_date - make_interval(years => $13::int + 1)))
+      AND (
+            $18::float8 IS NULL
+         OR (
+              p.lat IS NOT NULL AND p.lng IS NOT NULL
+              AND (6371 * acos(LEAST(1.0, GREATEST(-1.0,
+                    cos(radians($18::float8)) * cos(radians(p.lat))
+                    * cos(radians(p.lng) - radians($19::float8))
+                    + sin(radians($18::float8)) * sin(radians(p.lat))
+              )))) <= $20::float8
+            )
+      )
 )
 SELECT s.user_id, s.name, s.date_of_birth, s.bio, s.gender, s.location, s.interests,
-       s.photo_urls, s.primary_photo_url,
+       s.photo_urls, s.primary_photo_url, s.traits,
        s.score::float8 AS score_num,
        s.score::text   AS score_text
 FROM scored s
@@ -95,6 +107,7 @@ type Candidate struct {
 	Interests       []string
 	PhotoURLs       []string
 	PrimaryPhotoURL string
+	Traits          domain.Traits
 	Score           float64
 	// ScoreText is the exact decimal Postgres produced, carried into the next
 	// cursor so the keyset comparison is exact.
@@ -111,6 +124,9 @@ type DiscoverQuery struct {
 	Genders  []string
 	Cursor   *discoverCursor
 	Limit    int
+	ViewerLat     *float64
+	ViewerLng     *float64
+	MaxDistanceKM *int
 }
 
 // Repo holds the matching-domain queries.
@@ -141,6 +157,7 @@ func (Repo) Discover(ctx context.Context, q db.Querier, query DiscoverQuery) ([]
 		query.AgeMin, query.AgeMax, genders,
 		cursorScore, cursorUserID,
 		query.Limit,
+		query.ViewerLat, query.ViewerLng, query.MaxDistanceKM,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("discover candidates: %w", err)
@@ -151,8 +168,9 @@ func (Repo) Discover(ctx context.Context, q db.Querier, query DiscoverQuery) ([]
 	for rows.Next() {
 		var c Candidate
 		var photoURLs []byte
+		var traitsRaw []byte
 		if err := rows.Scan(&c.UserID, &c.Name, &c.DateOfBirth, &c.Bio, &c.Gender, &c.Location,
-			&c.Interests, &photoURLs, &c.PrimaryPhotoURL, &c.Score, &c.ScoreText); err != nil {
+			&c.Interests, &photoURLs, &c.PrimaryPhotoURL, &traitsRaw, &c.Score, &c.ScoreText); err != nil {
 			return nil, fmt.Errorf("scan candidate: %w", err)
 		}
 		urls, err := decodeStringArray(photoURLs)
@@ -163,9 +181,27 @@ func (Repo) Discover(ctx context.Context, q db.Querier, query DiscoverQuery) ([]
 		if c.Interests == nil {
 			c.Interests = []string{}
 		}
+		if len(traitsRaw) > 0 {
+			var traits domain.Traits
+			if err := json.Unmarshal(traitsRaw, &traits); err == nil && traits.Complete() {
+				c.Traits = traits
+			}
+		}
 		out = append(out, c)
 	}
 	return out, rows.Err()
+}
+
+// Coords returns a user's stored map position, used to apply max_distance_km.
+func (Repo) Coords(ctx context.Context, q db.Querier, userID uuid.UUID) (lat, lng *float64, err error) {
+	err = q.QueryRow(ctx, `SELECT lat, lng FROM profiles WHERE user_id = $1`, userID).Scan(&lat, &lng)
+	if err != nil {
+		if db.IsNoRows(err) {
+			return nil, nil, nil
+		}
+		return nil, nil, err
+	}
+	return lat, lng, nil
 }
 
 // UserExists reports whether a user id refers to a real account.
