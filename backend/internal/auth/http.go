@@ -61,6 +61,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	httpx.WriteJSON(w, http.StatusCreated, result)
+	h.setRefreshCookie(w, result)
 	return nil
 }
 
@@ -83,6 +84,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	httpx.WriteJSON(w, http.StatusOK, result)
+	h.setRefreshCookie(w, result)
 	return nil
 }
 
@@ -92,14 +94,19 @@ type refreshRequest struct {
 
 func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) error {
 	var req refreshRequest
-	if err := httpx.DecodeJSON(w, r, &req); err != nil {
-		return err
+	if r.ContentLength != 0 {
+		if err := httpx.DecodeJSON(w, r, &req); err != nil {
+			return err
+		}
 	}
-	result, err := h.Service.Refresh(r.Context(), strings.TrimSpace(req.RefreshToken), SessionMetaFromRequest(r))
+	token := RefreshTokenFromRequest(r, req.RefreshToken)
+	result, err := h.Service.Refresh(r.Context(), token, SessionMetaFromRequest(r))
 	if err != nil {
+		ClearRefreshCookie(w, h.Service.SecureCookies())
 		return err
 	}
 	httpx.WriteJSON(w, http.StatusOK, result)
+	h.setRefreshCookie(w, result)
 	return nil
 }
 
@@ -111,6 +118,7 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) error {
 	if err := h.Service.Logout(r.Context(), principal); err != nil {
 		return err
 	}
+	ClearRefreshCookie(w, h.Service.SecureCookies())
 	httpx.NoContent(w)
 	return nil
 }
@@ -260,4 +268,11 @@ func truncateRunes(s string, max int) string {
 		return s
 	}
 	return string(runes[:max])
+}
+
+func (h *Handler) setRefreshCookie(w http.ResponseWriter, result *AuthResult) {
+	if result == nil || result.RefreshToken == "" {
+		return
+	}
+	SetRefreshCookie(w, result.RefreshToken, h.Service.RefreshTTL(), h.Service.SecureCookies())
 }

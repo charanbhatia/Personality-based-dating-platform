@@ -70,6 +70,7 @@ type Service struct {
 	emailVerificationTTL time.Duration
 	kicker               EventKicker
 	now                  func() time.Time
+	secureCookies        bool
 }
 
 // ServiceConfig configures NewService.
@@ -81,6 +82,7 @@ type ServiceConfig struct {
 	EmailVerificationTTL time.Duration
 	Kicker               EventKicker
 	Now                  func() time.Time
+	SecureCookies        bool
 }
 
 func NewService(cfg ServiceConfig) (*Service, error) {
@@ -111,8 +113,15 @@ func NewService(cfg ServiceConfig) (*Service, error) {
 		emailVerificationTTL: cfg.EmailVerificationTTL,
 		kicker:               cfg.Kicker,
 		now:                  now,
+		secureCookies:        cfg.SecureCookies,
 	}, nil
 }
+
+// RefreshTTL is the cookie Max-Age for the httpOnly refresh token.
+func (s *Service) RefreshTTL() time.Duration { return s.refreshTTL }
+
+// SecureCookies is true in production so the refresh cookie is marked Secure.
+func (s *Service) SecureCookies() bool { return s.secureCookies }
 
 // UserDTO is the caller's own identity. Only ever returned to the account owner;
 // public and discovery payloads use profile.PublicProfile, which has no email.
