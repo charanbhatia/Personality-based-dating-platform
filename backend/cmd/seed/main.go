@@ -123,6 +123,18 @@ var locations = []string{
 	"London", "New York", "Sydney", "Toronto", "Dubai", "Singapore",
 }
 
+var cityCoords = map[string][2]float64{
+	"Mumbai": {19.076, 72.877}, "Delhi": {28.704, 77.102}, "Bangalore": {12.972, 77.595},
+	"Hyderabad": {17.385, 78.487}, "Chennai": {13.083, 80.270}, "Kolkata": {22.572, 88.364},
+	"Pune": {18.520, 73.857}, "Ahmedabad": {23.023, 72.571}, "Jaipur": {26.912, 75.787},
+	"Lucknow": {26.847, 80.946}, "Chandigarh": {30.733, 76.779}, "Indore": {22.719, 75.858},
+	"Coimbatore": {11.016, 76.956}, "Kochi": {9.931, 76.267}, "Goa": {15.491, 73.828},
+	"Dehradun": {30.317, 78.032}, "Mysore": {12.296, 76.639}, "Nagpur": {21.146, 79.088},
+	"Bhopal": {23.259, 77.412}, "Surat": {21.170, 72.831},
+	"London": {51.507, -0.128}, "New York": {40.713, -74.006}, "Sydney": {-33.869, 151.209},
+	"Toronto": {43.653, -79.383}, "Dubai": {25.205, 55.271}, "Singapore": {1.352, 103.820},
+}
+
 func main() {
 	users := flag.Int("users", 55, "number of demo users to create")
 	reset := flag.Bool("reset", false, "delete existing seeded users before inserting")
@@ -256,6 +268,8 @@ type person struct {
 	Bio         string
 	Gender      domain.Gender
 	Location    string
+	Lat         *float64
+	Lng         *float64
 	Interests   []string
 	Traits      domain.Traits
 	AgeMin      int
@@ -301,13 +315,22 @@ func buildPerson(rng *rand.Rand, index int) person {
 		ageMin = auth.MinimumAge
 	}
 
+	loc := locations[rng.Intn(len(locations))]
+	var lat, lng *float64
+	if c, ok := cityCoords[loc]; ok {
+		a, b := c[0], c[1]
+		lat, lng = &a, &b
+	}
+
 	return person{
 		Email:       fmt.Sprintf(seedEmailPattern, index),
 		Name:        firstNames[rng.Intn(len(firstNames))] + " " + lastNames[rng.Intn(len(lastNames))],
 		DateOfBirth: dob,
 		Bio:         bios[rng.Intn(len(bios))],
 		Gender:      gender,
-		Location:    locations[rng.Intn(len(locations))],
+		Location:    loc,
+		Lat:         lat,
+		Lng:         lng,
 		Interests:   interests,
 		Traits:      traits,
 		AgeMin:      ageMin,
@@ -343,9 +366,9 @@ func insertPerson(ctx context.Context, pool *pgxpool.Pool, p person, passwordHas
 			return err
 		}
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO profiles (user_id, bio, gender, location, interests, photo_urls, primary_photo_url, photo_url)
-			VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::text, $8::varchar)`,
-			userID, p.Bio, string(p.Gender), p.Location, p.Interests, photoURLs, p.PhotoURL, p.PhotoURL); err != nil {
+			INSERT INTO profiles (user_id, bio, gender, location, lat, lng, interests, photo_urls, primary_photo_url, photo_url)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::text, $10::varchar)`,
+			userID, p.Bio, string(p.Gender), p.Location, p.Lat, p.Lng, p.Interests, photoURLs, p.PhotoURL, p.PhotoURL); err != nil {
 			return fmt.Errorf("insert profile: %w", err)
 		}
 
