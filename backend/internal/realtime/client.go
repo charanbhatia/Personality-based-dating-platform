@@ -126,6 +126,23 @@ func (c *Client) handle(ctx context.Context, frame inbound) {
 			Message:     encoded,
 		}))
 
+	case TypeTypingStart, TypeTypingStop:
+		convID, ok := c.parseConversation(frame)
+		if !ok {
+			return
+		}
+		if err := c.server.messaging.CanAccess(ctx, c.userID, convID); err != nil {
+			c.enqueue(serviceError(err))
+			return
+		}
+		typing := frame.Type == TypeTypingStart
+		c.hub.broadcast(ctx, convID, encode(outbound{
+			Type:           TypeTyping,
+			ConversationID: convID.String(),
+			UserID:         c.userID.String(),
+			Typing:         &typing,
+		}))
+
 	default:
 		c.enqueue(errorFrame(CodeBadFrame, "unknown frame type "+frame.Type))
 	}

@@ -143,6 +143,17 @@ func (h *Hub) deliver(convID uuid.UUID, payload []byte) {
 	}
 }
 
+func (h *Hub) broadcast(ctx context.Context, convID uuid.UUID, payload []byte) {
+	if h.redis == nil {
+		h.deliver(convID, payload)
+		return
+	}
+	if err := h.redis.Publish(ctx, channel(convID), payload).Err(); err != nil {
+		h.log.Warn("publishing realtime frame failed", "conversation_id", convID, "error", err)
+		h.deliver(convID, payload)
+	}
+}
+
 func conversationFromChannel(name string) (uuid.UUID, error) {
 	const prefix = "chat:conv:"
 	if len(name) <= len(prefix) {

@@ -14,16 +14,20 @@ const (
 	TypeUnsubscribe = "unsubscribe"
 	TypeMessageSend = "message.send"
 	TypePing        = "ping"
+	TypeTypingStart = "typing.start"
+	TypeTypingStop  = "typing.stop"
 )
 
 // Server to client frame types.
 const (
-	TypeSubscribed = "subscribed"
-	TypeMessageAck = "message.ack"
-	TypeMessageNew = "message.new"
-	TypeError      = "error"
-	TypePong       = "pong"
-	TypeConnected  = "connected"
+	TypeSubscribed       = "subscribed"
+	TypeMessageAck       = "message.ack"
+	TypeMessageNew       = "message.new"
+	TypeError            = "error"
+	TypePong             = "pong"
+	TypeConnected        = "connected"
+	TypeTyping           = "typing"
+	TypeConversationRead = "conversation.read"
 )
 
 // Error codes carried on TypeError frames.
@@ -47,6 +51,9 @@ type outbound struct {
 	Type           string          `json:"type"`
 	ConversationID string          `json:"conversation_id,omitempty"`
 	ClientMsgID    string          `json:"client_msg_id,omitempty"`
+	UserID         string          `json:"user_id,omitempty"`
+	Typing         *bool           `json:"typing,omitempty"`
+	LastReadAt     string          `json:"last_read_at,omitempty"`
 	Message        json.RawMessage `json:"message,omitempty"`
 	Code           string          `json:"code,omitempty"`
 	Error          string          `json:"error,omitempty"`
