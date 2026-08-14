@@ -114,7 +114,8 @@
   white-space: nowrap;
   display: block;
 }
-.btn-logout {
+.btn-logout,
+.theme-toggle {
   display: inline-grid;
   place-items: center;
   width: 44px;
@@ -124,11 +125,13 @@
   border: 1px solid transparent;
   border-radius: var(--r-md);
 }
-.btn-logout svg {
+.btn-logout svg,
+.theme-toggle svg {
   width: 17px;
   height: 17px;
 }
-.btn-logout:hover {
+.btn-logout:hover,
+.theme-toggle:hover {
   color: var(--accent);
   background: var(--paper-sunk);
 }

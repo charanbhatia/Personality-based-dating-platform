@@ -36,6 +36,9 @@ type Page[T any] struct {
 
 func WriteJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
+	// Matches internal/httpx: without this the messaging, media, notification
+	// and health responses were the only ones a browser would content-sniff.
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
 }

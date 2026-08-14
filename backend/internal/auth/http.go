@@ -60,8 +60,8 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	httpx.WriteJSON(w, http.StatusCreated, result)
 	h.setRefreshCookie(w, result)
+	httpx.WriteJSON(w, http.StatusCreated, result)
 	return nil
 }
 
@@ -83,8 +83,8 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	httpx.WriteJSON(w, http.StatusOK, result)
 	h.setRefreshCookie(w, result)
+	httpx.WriteJSON(w, http.StatusOK, result)
 	return nil
 }
 
@@ -105,8 +105,8 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) error {
 		ClearRefreshCookie(w, h.Service.SecureCookies())
 		return err
 	}
-	httpx.WriteJSON(w, http.StatusOK, result)
 	h.setRefreshCookie(w, result)
+	httpx.WriteJSON(w, http.StatusOK, result)
 	return nil
 }
 

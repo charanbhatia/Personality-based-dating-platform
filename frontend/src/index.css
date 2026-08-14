@@ -120,10 +120,102 @@
   line-height: 1.62;
   color: var(--ink-soft);
   background-color: var(--paper);
+  color-scheme: light;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* ============================================================
+   Dark ground
+   ------------------------------------------------------------
+   Only the palette is redefined; every component keeps reading
+   the same tokens, so nothing below this block needs to know a
+   theme exists.
+
+   Warm rather than blue-black, to stay in the same family as the
+   light theme. The accent and the signal colours are lifted:
+   the light-mode pink is only ~3:1 on a dark ground, which is
+   below the floor this system holds itself to.
+   ============================================================ */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --paper: #16110f;
+  --paper-raised: #211a18;
+  --paper-sunk: #100c0b;
+  --paper-deep: #0b0808;
+
+  --ink: #f8efe9;
+  --ink-soft: #ddcdc6;
+  --ink-mute: #a89892;
+
+  --rule: #2c2320;
+  --rule-strong: #443733;
+
+  --accent: #ff5f8f;
+  --accent-hover: #ff85a8;
+  --accent-wash: #38131f;
+
+  --teal: #3fbfa8;
+  --teal-wash: #10312c;
+  --violet: #a48cff;
+  --violet-wash: #241d3f;
+  --persimmon: #ff7a45;
+
+  --good: #46c07f;
+  --good-wash: #10301f;
+  --warn: #e0a03a;
+  --warn-wash: #34260f;
+  --bad: #ff6b6b;
+  --bad-wash: #3a1717;
+
+  /* Shadows read as depth on paper and as nothing on a dark ground
+     unless they are considerably deeper. */
+  --lift: 0 1px 2px rgba(0, 0, 0, 0.5), 0 2px 8px -4px rgba(0, 0, 0, 0.65);
+  --lift-md: 0 1px 2px rgba(0, 0, 0, 0.55), 0 10px 24px -14px rgba(0, 0, 0, 0.8);
+  --lift-lg: 0 2px 4px rgba(0, 0, 0, 0.6), 0 18px 38px -18px rgba(0, 0, 0, 0.85);
+}
+
+/* Follow the operating system unless the reader has chosen light explicitly. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+
+    --paper: #16110f;
+    --paper-raised: #211a18;
+    --paper-sunk: #100c0b;
+    --paper-deep: #0b0808;
+
+    --ink: #f8efe9;
+    --ink-soft: #ddcdc6;
+    --ink-mute: #a89892;
+
+    --rule: #2c2320;
+    --rule-strong: #443733;
+
+    --accent: #ff5f8f;
+    --accent-hover: #ff85a8;
+    --accent-wash: #38131f;
+
+    --teal: #3fbfa8;
+    --teal-wash: #10312c;
+    --violet: #a48cff;
+    --violet-wash: #241d3f;
+    --persimmon: #ff7a45;
+
+    --good: #46c07f;
+    --good-wash: #10301f;
+    --warn: #e0a03a;
+    --warn-wash: #34260f;
+    --bad: #ff6b6b;
+    --bad-wash: #3a1717;
+
+    --lift: 0 1px 2px rgba(0, 0, 0, 0.5), 0 2px 8px -4px rgba(0, 0, 0, 0.65);
+    --lift-md: 0 1px 2px rgba(0, 0, 0, 0.55), 0 10px 24px -14px rgba(0, 0, 0, 0.8);
+    --lift-lg: 0 2px 4px rgba(0, 0, 0, 0.6), 0 18px 38px -18px rgba(0, 0, 0, 0.85);
+  }
 }
 
 html,

@@ -10,6 +10,18 @@ import (
 // Person A does not have to keep it in JavaScript storage.
 const RefreshCookieName = "refresh_token"
 
+// crossSite reports whether the cookie has to survive a request from a
+// different site. A single-origin deployment keeps SameSite=Lax, which is the
+// stronger default; a browser will not attach a Lax cookie to the cross-origin
+// refresh call a separately hosted frontend makes, so those deployments need
+// SameSite=None, which browsers only honour alongside Secure.
+func sameSite(secure bool) http.SameSite {
+	if secure {
+		return http.SameSiteNoneMode
+	}
+	return http.SameSiteLaxMode
+}
+
 func refreshCookie(token string, ttl time.Duration, secure bool) *http.Cookie {
 	maxAge := int(ttl.Seconds())
 	if token == "" {
@@ -22,11 +34,14 @@ func refreshCookie(token string, ttl time.Duration, secure bool) *http.Cookie {
 		MaxAge:   maxAge,
 		HttpOnly: true,
 		Secure:   secure,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: sameSite(secure),
 	}
 }
 
 // SetRefreshCookie stores the rotated refresh token in an httpOnly cookie.
+//
+// Call this before writing the response body: WriteJSON commits the status
+// line, and headers set afterwards are discarded.
 func SetRefreshCookie(w http.ResponseWriter, token string, ttl time.Duration, secure bool) {
 	http.SetCookie(w, refreshCookie(token, ttl, secure))
 }

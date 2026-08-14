@@ -31,6 +31,31 @@
     <meta name="twitter:image" content="/og-cover.png" />
     <link rel="preload" href="/fonts/jakarta-400.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/fonts/bricolage-700.woff2" as="font" type="font/woff2" crossorigin />
+
+    <!-- Applied before first paint. Waiting for React would flash the wrong
+         ground at anyone who chose a theme, which is exactly who notices.
+         Light is the default, so a device set to dark still gets the designed
+         palette unless the reader opts in. -->
+    <script>
+      (function () {
+        var dark = '#16110f';
+        var light = '#fff8f4';
+        var resolved = 'light';
+        try {
+          var t = localStorage.getItem('theme');
+          if (t === 'dark') resolved = 'dark';
+          else if (t === 'system')
+            resolved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        } catch (e) {
+          /* storage unavailable: fall through to the light default */
+        }
+        // Set explicitly either way so the prefers-color-scheme rule only wins
+        // when the reader actually asked to follow the system.
+        document.documentElement.setAttribute('data-theme', resolved);
+        var m = document.querySelector('meta[name="theme-color"]');
+        if (m) m.setAttribute('content', resolved === 'dark' ? dark : light);
+      })();
+    </script>
     <title>Kindred · Meet minds, not just faces</title>
   </head>
   <body>

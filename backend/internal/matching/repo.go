@@ -116,14 +116,14 @@ type Candidate struct {
 
 // DiscoverQuery is the resolved filter for one page of the feed.
 type DiscoverQuery struct {
-	ViewerID uuid.UUID
-	Traits   []float64
-	Weights  []float64
-	AgeMin   *int
-	AgeMax   *int
-	Genders  []string
-	Cursor   *discoverCursor
-	Limit    int
+	ViewerID      uuid.UUID
+	Traits        []float64
+	Weights       []float64
+	AgeMin        *int
+	AgeMax        *int
+	Genders       []string
+	Cursor        *discoverCursor
+	Limit         int
 	ViewerLat     *float64
 	ViewerLng     *float64
 	MaxDistanceKM *int

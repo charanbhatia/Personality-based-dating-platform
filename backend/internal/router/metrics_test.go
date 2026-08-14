@@ -98,3 +98,17 @@ func TestTraceParentIsPropagatedAndGenerated(t *testing.T) {
 		t.Error("expected a fresh span id within the inbound trace")
 	}
 }
+
+// Both JSON writers must set nosniff. The platform writer, which serves the
+// health, messaging, media and notification responses, previously did not.
+func TestJSONResponsesCarryNosniff(t *testing.T) {
+	h := testHandler(t)
+
+	for _, path := range []string{"/healthz", "/readyz", "/api/v1/nope"} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		if got := rec.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+			t.Errorf("%s X-Content-Type-Options = %q, want nosniff", path, got)
+		}
+	}
+}

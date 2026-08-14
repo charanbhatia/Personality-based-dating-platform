@@ -1,5 +1,9 @@
+import { useState } from 'react';
+
 // Avatar with graceful fallback: shows the photo when available, otherwise a
-// flat ink tile with the person's initials.
+// flat ink tile with the person's initials. A photo that fails to load falls
+// back too — a stored URL can outlive the object it points at, and a broken
+// image icon is worse than initials.
 function initials(name = '') {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return '?';
@@ -28,6 +32,16 @@ export default function Avatar({
 }) {
   // `fill` lets a container size the tile instead — a match card wants the ink
   // edge to edge so the name scrim has something solid to sit on.
+  // A new src deserves a fresh attempt; otherwise one bad URL would poison the
+  // tile for every person rendered through the same slot. Reset during render
+  // rather than in an effect, which would cascade an extra render.
+  const [failed, setFailed] = useState(false);
+  const [lastSrc, setLastSrc] = useState(src);
+  if (src !== lastSrc) {
+    setLastSrc(src);
+    setFailed(false);
+  }
+
   const dim = fill
     ? { fontSize: size * 0.36 }
     : { width: size, height: size, fontSize: size * 0.36 };
@@ -37,8 +51,8 @@ export default function Avatar({
   // decorative because a real name always sits next to it.
   return (
     <div className={`avatar ${ring ? 'avatar--ring' : ''} ${className}`} style={dim}>
-      {src ? (
-        <img src={src} alt={name || ''} loading="lazy" />
+      {src && !failed ? (
+        <img src={src} alt={name || ''} loading="lazy" onError={() => setFailed(true)} />
       ) : (
         <span
           aria-hidden="true"

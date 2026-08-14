@@ -15,6 +15,16 @@ import { IconHeart, IconChat, IconPin, IconUser, IconSpark } from '../components
 
 function PersonCard({ person, score, photo, actions }) {
   const traits = topTraits(person.traits);
+  // A stored photo URL can outlive the object behind it; fall back to the
+  // initials tile rather than rendering a broken image. The failure resets
+  // during render when the photo changes, which avoids the cascading render an
+  // effect would cause.
+  const [photoFailed, setPhotoFailed] = useState(false);
+  const [lastPhoto, setLastPhoto] = useState(photo);
+  if (photo !== lastPhoto) {
+    setLastPhoto(photo);
+    setPhotoFailed(false);
+  }
   return (
     <TiltCard max={8}>
       <article className="match-card">
@@ -22,8 +32,15 @@ function PersonCard({ person, score, photo, actions }) {
           <span className="match-ring-badge">
             <CompatibilityRing value={score} size={50} stroke={4} label="" />
           </span>
-          {photo ? (
-            <img src={photo} alt={person.name || ''} width={238} height={146} loading="lazy" />
+          {photo && !photoFailed ? (
+            <img
+              src={photo}
+              alt={person.name || ''}
+              width={238}
+              height={146}
+              loading="lazy"
+              onError={() => setPhotoFailed(true)}
+            />
           ) : (
             <div className="match-media-fallback">
               <Avatar name={person.name} seed={person.user_id} size={74} fill />
@@ -92,7 +109,12 @@ export default function Matches() {
     queryFn: () => prefsApi.get().then((r) => r.data),
     staleTime: 60_000,
   });
-  const needsLocation = Boolean(prefs.data?.max_distance_km) && me.data?.lat == null;
+  // Missing coordinates cut both ways: the viewer's own distance filter cannot
+  // apply, and discovery drops candidates without coordinates entirely, so this
+  // profile is invisible to anyone filtering by distance. Prompt on the missing
+  // location itself rather than only when this user set a distance preference.
+  const needsLocation = me.data?.lat == null;
+  const distanceFilterOn = Boolean(prefs.data?.max_distance_km);
 
   const swipe = useMutation({
     mutationFn: ({ user_id, action }) => likesApi.swipe(user_id, action).then((r) => r.data),
@@ -179,8 +201,10 @@ export default function Matches() {
         </div>
       )}
       {needsLocation && (
-        <div className="alert alert-error" role="status">
-          Distance is on, but we do not have your location yet, so the feed is unfiltered.
+        <div className="alert" role="status">
+          {distanceFilterOn
+            ? 'Distance is on, but we do not have your location yet, so your feed is unfiltered — and people who filter by distance cannot see you.'
+            : 'We do not have your location yet, so people who filter by distance cannot see you.'}
           <button
             type="button"
             className="btn btn-ghost"

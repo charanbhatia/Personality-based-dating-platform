@@ -17,6 +17,7 @@ import Brand from './components/Brand';
 import Loading from './components/Loading';
 import ErrorBoundary from './components/ErrorBoundary';
 import NotificationBell from './components/NotificationBell';
+import ThemeToggle from './components/ThemeToggle';
 import OfflineBanner from './components/OfflineBanner';
 import useRouteMeta from './hooks/useRouteMeta';
 import { needsOnboarding, nextOnboardingPath, afterAuthPath } from './lib/onboarding';
@@ -135,6 +136,7 @@ function Layout() {
           </NavLink>
         </nav>
         <div className="header-right">
+          <ThemeToggle />
           {user && (
             <>
               <NotificationBell />
