@@ -123,8 +123,14 @@ cannot be used to enumerate accounts.
 { "refresh_token": "opaque" }
 ```
 
+Body `{ "refresh_token": "opaque" }` **or** the `refresh_token` httpOnly cookie
+(`Path=/`, `SameSite=Lax`, `Secure` in production). Login, register and refresh
+set the cookie; logout and a failed refresh clear it. JSON still returns a
+refresh token for tests and old clients; the SPA prefers the cookie and does
+not store refresh in `localStorage`.
+
 Returns a fresh pair and invalidates the one presented: **store the new refresh
-token on every call.** Presenting an already-rotated token is treated as theft —
+token on every call** (or rely on the Set-Cookie rotation). Presenting an already-rotated token is treated as theft —
 the whole session is revoked and `401 refresh_token_reused` is returned, so the
 user must sign in again.
 
@@ -334,9 +340,11 @@ invalidates the cache, so discovery scores update immediately.
 Registration pre-fills a permissive age range, so `genders` being empty is what
 marks preferences incomplete.
 
-`distance_filter_active` is `false`: `max_distance_km` is stored and returned for
-the UI, but discovery does not filter on it yet (geo is deferred per the
-roadmap). Label it accordingly rather than implying a filter that is not applied.
+`distance_filter_active` is `true` when `max_distance_km` is set. Discovery
+applies a Haversine filter (`profiles.lat` / `lng`) when the viewer also has
+coordinates. Candidates without coords are excluded while the filter is on.
+Set both `lat` and `lng` on `PUT /profile` (or use the SPA “Use my location”
+control). `null` `max_distance_km` means anywhere.
 
 ### `PUT /preferences` → 200
 
@@ -361,14 +369,22 @@ and is canonicalised. Trait weights accept the Big Five keys with values in
 { "items": [ { "user_id": "uuid", "name": "Ada", "age": 32, "bio": "", "gender": "woman",
                "location": "Pune", "interests": [], "photo_urls": [],
                "primary_photo_url": "", "is_matched": false,
-               "compatibility_score": 0.87 } ],
+               "compatibility_score": 0.87,
+               "traits": { "openness": 0.7, "conscientiousness": 0.6,
+                           "extraversion": 0.4, "agreeableness": 0.8,
+                           "neuroticism": 0.3 } } ],
   "next_cursor": "opaque" }
 ```
 
 `409 assessment_required` until the caller has taken the assessment.
 
+`traits` is the candidate's stored Big Five vector (values in [0, 1]) so the
+discover UI can show top traits on each card. Ranking still uses
+`compatibility_score`.
+
 Candidates are excluded when they are the caller, have no assessment, fall
-outside the age or gender preferences, have already been swiped, or are involved
+outside the age or gender preferences, are farther than `max_distance_km` from
+the viewer (when the viewer has `lat`/`lng` and the preference is set), have already been swiped, or are involved
 in a block either way. Scoring and filtering happen in SQL; ordering is
 `compatibility_score` descending with the user id as a tiebreaker, which is what
 makes the cursor stable.

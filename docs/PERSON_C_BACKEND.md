@@ -243,8 +243,11 @@ Correct `ListByUserID` parameter binding; order by `last_message_at DESC NULLS L
 { "type": "subscribe", "conversation_id": "..." }
 { "type": "unsubscribe", "conversation_id": "..." }
 { "type": "message.send", "conversation_id": "...", "content": "...", "client_msg_id": "..." }
+{ "type": "typing.start", "conversation_id": "..." }
+{ "type": "typing.stop", "conversation_id": "..." }
 { "type": "message.ack", "client_msg_id": "...", "message": { } }
 { "type": "message.new", "message": { } }
+{ "type": "typing", "conversation_id": "...", "user_id": "...", "typing": true }
 { "type": "error", "code": "...", "message": "..." }
 { "type": "ping" }
 { "type": "pong" }
@@ -356,7 +359,7 @@ CREATE INDEX idx_notifications_user_created ON notifications(user_id, created_at
 | `auth.password_reset_requested` | Send email (or log in `EMAIL_MODE=log`) |
 | `auth.email_verification_requested` | Send confirmation email (or log in `EMAIL_MODE=log`) |
 
-Push notifications (FCM/APNs): **stub interface** only in MVP — log “would push”.
+Push notifications (FCM/APNs): real pipeline. `POST /api/v1/devices` `{ token, platform: web|android|ios }` upserts a token; `DELETE` removes it. When `FCM_SERVER_KEY` and/or `APNS_*` are set, match/message events push to stored tokens. With no tokens the worker still logs `would push`.
 
 ---
 
@@ -471,7 +474,7 @@ Publish a short `docs/RUNBOOK_LOADTEST.md` in M4 (you author).
 | B attaching photos | Required — B `PUT /profile/photos` resolves `asset_ids`; does not subscribe to `media.processed` |
 | F21 notifications API + match/message consumers + unread Redis | Required — done; idempotent on `event_id` |
 | F22 email stub | Required — done (`EMAIL_MODE=log` or SMTP) including email verification |
-| F22 push (FCM/APNs) | Stub only — logs `would push` |
+| F22 push (FCM/APNs) | Device tokens + FCM legacy HTTP / APNs p8 when env is set; otherwise log `would push` |
 | Unknown queue events | Ack, do not retry |
 | Legacy `/api/conversations` | Deprecated shim — **not** match-gated; v1 is the contract |
 | M4 two-replica demo doc, load numbers, ops runbooks | **Deferred M4** |
@@ -503,7 +506,7 @@ Error handling that is intentional: match missing → 404; not a participant →
 - [x] Email stub for password reset **and** email verification (`EMAIL_MODE=log` or SMTP/Mailhog)
 - [x] Prometheus `/metrics` + W3C `traceparent` on requests (full OTLP exporter still M4)
 - [x] Unread counters
-- [x] Push stub logs `would push` (no FCM/APNs in MVP)
+- [x] Push: `POST/DELETE /api/v1/devices`; FCM/APNs when configured, else log `would push`
 
 ### M4
 

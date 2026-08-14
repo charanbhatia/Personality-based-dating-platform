@@ -300,9 +300,10 @@ Body:
 
 `preferences_done` = age range set + at least one gender (define clearly in code).
 
-`max_distance_km` is accepted and stored so the UI can collect it. It is **not**
-applied to discovery (see package comment on `internal/preferences`). Trait
-weights **are** applied as a weighted average in the discover SQL.
+`max_distance_km` is applied in discover SQL (Haversine on `profiles.lat`/`lng`)
+when the viewer has coordinates. `distance_filter_active` is true whenever the
+preference is set. Trait weights **are** applied as a weighted average in the
+discover SQL.
 
 ---
 
@@ -490,7 +491,7 @@ Implemented endpoints and their exact contracts are in
 | F06 photos: HTTPS URLs **and** C `asset_ids` | Required — done |
 | F07–F08 quiz, 0–1 traits, 30-day retake, cache invalidate | Required — done |
 | F09 prefs: age, gender, **trait_weights applied in SQL scoring** | Required — done |
-| F09 `max_distance_km` | **Optional / deferred** — stored + returned; `DistanceFilterActive: false`; not in discover SQL (M2 decision) |
+| F09 `max_distance_km` | Applied in discover SQL (Haversine) when viewer has `profiles.lat`/`lng`; `distance_filter_active` is true when the pref is set |
 | F10–F13 discover SQL prefilter, score sort, cursor, likes, mutual match, outbox | Required — done |
 | F14–F15 block/report + `user.blocked` | Required — done |
 | Redis `sess:{sid}` access-token denylist | **Optional** — not built; logout revokes refresh immediately; access JWT dies at expiry (~15m) |
