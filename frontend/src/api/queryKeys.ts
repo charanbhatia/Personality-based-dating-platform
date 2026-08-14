@@ -1,0 +1,15 @@
+export const qk = {
+  discover: ['discover'] as const,
+  matches: ['matches'] as const,
+  conversations: ['conversations'] as const,
+  messages: (id: string) => ['conversation', id, 'messages'] as const,
+  conversation: (id: string) => ['conversation', id] as const,
+  notifications: ['notifications'] as const,
+  unread: ['notifications', 'unread'] as const,
+  profile: ['profile'] as const,
+  publicUser: (id: string) => ['users', id, 'public'] as const,
+  sessions: ['sessions'] as const,
+  blocks: ['blocks'] as const,
+  assessment: ['personality', 'assessment'] as const,
+  preferences: ['preferences'] as const,
+};
