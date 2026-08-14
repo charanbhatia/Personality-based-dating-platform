@@ -82,12 +82,14 @@ const conversationSelect = `SELECT c.id,
                                    (SELECT COUNT(*) FROM messages m
                                       WHERE m.conversation_id = c.id
                                         AND m.sender_id <> $1
-                                        AND (cr.last_read_at IS NULL OR m.created_at > cr.last_read_at))
+                                        AND (cr.last_read_at IS NULL OR m.created_at > cr.last_read_at)),
+                                   pr.last_read_at
                             FROM conversations c
                             JOIN users peer
                               ON peer.id = CASE WHEN c.user1_id = $1 THEN c.user2_id ELSE c.user1_id END
                             LEFT JOIN profiles p ON p.user_id = peer.id
-                            LEFT JOIN conversation_reads cr ON cr.conversation_id = c.id AND cr.user_id = $1`
+                            LEFT JOIN conversation_reads cr ON cr.conversation_id = c.id AND cr.user_id = $1
+                            LEFT JOIN conversation_reads pr ON pr.conversation_id = c.id AND pr.user_id = peer.id`
 
 func scanConversation(row pgx.Row) (Conversation, error) {
 	var c Conversation
@@ -95,7 +97,7 @@ func scanConversation(row pgx.Row) (Conversation, error) {
 	err := row.Scan(
 		&c.ID, &c.MatchID, &c.LastMessageAt, &c.LastMessagePreview, &c.CreatedAt, &activityAt,
 		&c.Peer.UserID, &c.Peer.Name, &c.Peer.PhotoURL, &c.Peer.Bio, &c.Peer.Location,
-		&c.UnreadCount,
+		&c.UnreadCount, &c.PeerLastReadAt,
 	)
 	return c, err
 }
@@ -239,13 +241,15 @@ func (s *Store) insertMessage(ctx context.Context, convID, senderID uuid.UUID, c
 	return m, true, nil
 }
 
-func (s *Store) markRead(ctx context.Context, convID, userID uuid.UUID) error {
+func (s *Store) markRead(ctx context.Context, convID, userID uuid.UUID) (time.Time, error) {
 	const q = `INSERT INTO conversation_reads (conversation_id, user_id, last_read_at)
 	           VALUES ($1, $2, now())
-	           ON CONFLICT (conversation_id, user_id) DO UPDATE SET last_read_at = now()`
+	           ON CONFLICT (conversation_id, user_id) DO UPDATE SET last_read_at = now()
+	           RETURNING last_read_at`
 
-	_, err := s.pool.Exec(ctx, q, convID, userID)
-	return err
+	var at time.Time
+	err := s.pool.QueryRow(ctx, q, convID, userID).Scan(&at)
+	return at, err
 }
 
 func preview(content string) string {

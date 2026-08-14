@@ -377,6 +377,13 @@ func TestInboxReportsUnreadCountsAndHidesEmail(t *testing.T) {
 	if err := svc.MarkRead(ctx, alice, conv.ID); err != nil {
 		t.Fatalf("mark read: %v", err)
 	}
+	bobView, err := svc.Get(ctx, bob, conv.ID)
+	if err != nil {
+		t.Fatalf("bob conversation: %v", err)
+	}
+	if bobView.PeerLastReadAt == nil {
+		t.Fatal("peer_last_read_at is nil after Alice marked the thread read")
+	}
 	afterRead, _, err := svc.ListConversations(ctx, alice, nil, 20)
 	if err != nil {
 		t.Fatalf("inbox after read: %v", err)

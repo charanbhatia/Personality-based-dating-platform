@@ -3,6 +3,7 @@ package realtime
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/google/uuid"
 	goredis "github.com/redis/go-redis/v9"
@@ -26,8 +27,21 @@ func (p *Publisher) PublishMessage(ctx context.Context, conversationID uuid.UUID
 		ConversationID: conversationID.String(),
 		Message:        message,
 	})
+	return p.publish(ctx, conversationID, payload)
+}
 
-	// Without Redis the message is still delivered to clients on this process.
+func (p *Publisher) PublishRead(ctx context.Context, conversationID, userID uuid.UUID, at time.Time) error {
+	payload := encode(outbound{
+		Type:           TypeConversationRead,
+		ConversationID: conversationID.String(),
+		UserID:         userID.String(),
+		LastReadAt:     at.UTC().Format(time.RFC3339Nano),
+	})
+	return p.publish(ctx, conversationID, payload)
+}
+
+func (p *Publisher) publish(ctx context.Context, conversationID uuid.UUID, payload []byte) error {
+	// Without Redis the frame is still delivered to clients on this process.
 	if p.client == nil {
 		p.hub.deliver(conversationID, payload)
 		return nil

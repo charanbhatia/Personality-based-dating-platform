@@ -38,6 +38,7 @@ func NewHandler(svc *Service, log *slog.Logger, sendLimit func(http.Handler) htt
 func (h *Handler) RegisterRoutes(r *mux.Router) {
 	r.HandleFunc("/conversations", h.ListConversations).Methods(http.MethodGet)
 	r.HandleFunc("/conversations", h.CreateConversation).Methods(http.MethodPost)
+	r.HandleFunc("/conversations/{id}", h.GetConversation).Methods(http.MethodGet)
 	r.HandleFunc("/conversations/{id}/messages", h.ListMessages).Methods(http.MethodGet)
 	r.Handle("/conversations/{id}/messages", h.sendLimit(http.HandlerFunc(h.SendMessage))).Methods(http.MethodPost)
 	r.HandleFunc("/conversations/{id}/read", h.MarkRead).Methods(http.MethodPost)
@@ -107,6 +108,19 @@ func (h *Handler) CreateConversation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusCreated, conv)
+}
+
+func (h *Handler) GetConversation(w http.ResponseWriter, r *http.Request) {
+	userID, convID, ok := h.identify(w, r)
+	if !ok {
+		return
+	}
+	conv, err := h.svc.Get(r.Context(), userID, convID)
+	if err != nil {
+		h.writeServiceError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, conv)
 }
 
 func (h *Handler) ListMessages(w http.ResponseWriter, r *http.Request) {

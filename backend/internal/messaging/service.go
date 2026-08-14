@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/bits-assignment/dating-platform/backend/internal/platform/cursor"
 	"github.com/bits-assignment/dating-platform/backend/internal/platform/events"
@@ -38,6 +39,7 @@ type Publisher interface {
 // the realtime gateway; a nil broadcaster simply skips live delivery.
 type Broadcaster interface {
 	PublishMessage(ctx context.Context, conversationID uuid.UUID, message json.RawMessage) error
+	PublishRead(ctx context.Context, conversationID, userID uuid.UUID, at time.Time) error
 }
 
 type Service struct {
@@ -228,11 +230,27 @@ func (s *Service) publishMessageCreated(ctx context.Context, conv conversationRo
 	}
 }
 
+func (s *Service) Get(ctx context.Context, userID, convID uuid.UUID) (Conversation, error) {
+	if _, err := s.authorise(ctx, convID, userID); err != nil {
+		return Conversation{}, err
+	}
+	return s.store.conversationForUser(ctx, convID, userID)
+}
+
 func (s *Service) MarkRead(ctx context.Context, userID, convID uuid.UUID) error {
 	if _, err := s.authorise(ctx, convID, userID); err != nil {
 		return err
 	}
-	return s.store.markRead(ctx, convID, userID)
+	at, err := s.store.markRead(ctx, convID, userID)
+	if err != nil {
+		return err
+	}
+	if s.broadcaster != nil {
+		if err := s.broadcaster.PublishRead(ctx, convID, userID, at); err != nil && s.log != nil {
+			s.log.Warn("broadcasting read receipt failed", "conversation_id", convID, "error", err)
+		}
+	}
+	return nil
 }
 
 // authorise checks participation and blocks, returning the conversation so
