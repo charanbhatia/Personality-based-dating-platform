@@ -156,7 +156,8 @@ func (p redisOutboxPublisher) Publish(ctx context.Context, event outbox.Event) e
 		}
 	}
 	stream := events.StreamNotifications
-	if event.Type == outbox.EventPasswordResetRequired {
+	switch event.Type {
+	case outbox.EventPasswordResetRequired, outbox.EventEmailVerificationRequested:
 		stream = events.StreamEmail
 	}
 	_, err := p.q.Publish(ctx, stream, event.Type, payload)

@@ -373,6 +373,56 @@ func (Repo) ClaimPasswordResetToken(ctx context.Context, q db.Querier, tokenHash
 	return t, nil
 }
 
+// EmailVerificationToken is a single-use email confirmation grant.
+type EmailVerificationToken struct {
+	ID        uuid.UUID
+	UserID    uuid.UUID
+	ExpiresAt time.Time
+	UsedAt    *time.Time
+}
+
+func (Repo) CreateEmailVerificationToken(ctx context.Context, q db.Querier, userID uuid.UUID, tokenHash string, expiresAt time.Time) (uuid.UUID, error) {
+	var id uuid.UUID
+	err := q.QueryRow(ctx, `
+		INSERT INTO email_verification_tokens (user_id, token_hash, expires_at)
+		VALUES ($1, $2, $3) RETURNING id`, userID, tokenHash, expiresAt).Scan(&id)
+	return id, err
+}
+
+func (Repo) InvalidateEmailVerificationTokens(ctx context.Context, q db.Querier, userID uuid.UUID) error {
+	_, err := q.Exec(ctx,
+		`UPDATE email_verification_tokens SET used_at = now() WHERE user_id = $1 AND used_at IS NULL`, userID)
+	return err
+}
+
+func (Repo) ClaimEmailVerificationToken(ctx context.Context, q db.Querier, tokenHash string) (*EmailVerificationToken, error) {
+	t := &EmailVerificationToken{}
+	err := q.QueryRow(ctx, `
+		UPDATE email_verification_tokens
+		SET used_at = now()
+		WHERE id = (
+			SELECT id FROM email_verification_tokens
+			WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()
+			FOR UPDATE
+		)
+		RETURNING id, user_id, expires_at, used_at`, tokenHash,
+	).Scan(&t.ID, &t.UserID, &t.ExpiresAt, &t.UsedAt)
+	if err != nil {
+		if db.IsNoRows(err) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("claim verification token: %w", err)
+	}
+	return t, nil
+}
+
+func (Repo) MarkEmailVerified(ctx context.Context, q db.Querier, userID uuid.UUID) error {
+	_, err := q.Exec(ctx, `
+		UPDATE users SET email_verified_at = coalesce(email_verified_at, now()), updated_at = now()
+		WHERE id = $1`, userID)
+	return err
+}
+
 func nullableUUID(id uuid.UUID) any {
 	if id == uuid.Nil {
 		return nil

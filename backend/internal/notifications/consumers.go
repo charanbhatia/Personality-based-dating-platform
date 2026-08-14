@@ -38,16 +38,25 @@ func NotificationsHandler(svc *Service, log *slog.Logger) queue.Handler {
 
 func EmailHandler(svc *Service, log *slog.Logger) queue.Handler {
 	return func(ctx context.Context, e queue.Event) error {
-		if e.Type != events.TypePasswordResetRequested {
+		switch e.Type {
+		case events.TypePasswordResetRequested:
+			var payload events.PasswordResetRequested
+			if err := e.Decode(&payload); err != nil {
+				return err
+			}
+			return skipMissingUser(svc.OnPasswordResetRequested(ctx, payload), log, e)
+
+		case events.TypeEmailVerificationRequested:
+			var payload events.EmailVerificationRequested
+			if err := e.Decode(&payload); err != nil {
+				return err
+			}
+			return skipMissingUser(svc.OnEmailVerificationRequested(ctx, payload), log, e)
+
+		default:
 			log.Debug("ignoring email event", "type", e.Type, "event_id", e.ID)
 			return nil
 		}
-
-		var payload events.PasswordResetRequested
-		if err := e.Decode(&payload); err != nil {
-			return err
-		}
-		return skipMissingUser(svc.OnPasswordResetRequested(ctx, payload), log, e)
 	}
 }
 

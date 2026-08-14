@@ -21,9 +21,10 @@ import (
 
 // Event types owned by Person B. Consumers must be idempotent on event_id.
 const (
-	EventMatchCreated          = "match.created"
-	EventUserBlocked           = "user.blocked"
-	EventPasswordResetRequired = "auth.password_reset_requested"
+	EventMatchCreated               = "match.created"
+	EventUserBlocked                = "user.blocked"
+	EventPasswordResetRequired      = "auth.password_reset_requested"
+	EventEmailVerificationRequested = "auth.email_verification_requested"
 )
 
 // Event is one published message. The wire envelope is flat — event_id,

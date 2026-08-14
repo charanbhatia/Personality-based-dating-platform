@@ -24,6 +24,7 @@ const (
 	CodeRefreshTokenInvalid  = "refresh_token_invalid"
 	CodeRefreshTokenReused   = "refresh_token_reused"
 	CodeResetTokenInvalid    = "reset_token_invalid"
+	CodeVerifyTokenInvalid   = "verify_token_invalid"
 	CodeUnderageRegistration = "underage"
 )
 
@@ -61,23 +62,25 @@ type EventKicker interface{ Kick() }
 
 // Service implements the auth use cases (F01–F04).
 type Service struct {
-	pool             Pool
-	repo             Repo
-	tokens           *TokenManager
-	refreshTTL       time.Duration
-	passwordResetTTL time.Duration
-	kicker           EventKicker
-	now              func() time.Time
+	pool                 Pool
+	repo                 Repo
+	tokens               *TokenManager
+	refreshTTL           time.Duration
+	passwordResetTTL     time.Duration
+	emailVerificationTTL time.Duration
+	kicker               EventKicker
+	now                  func() time.Time
 }
 
 // ServiceConfig configures NewService.
 type ServiceConfig struct {
-	Pool             Pool
-	Tokens           *TokenManager
-	RefreshTTL       time.Duration
-	PasswordResetTTL time.Duration
-	Kicker           EventKicker
-	Now              func() time.Time
+	Pool                 Pool
+	Tokens               *TokenManager
+	RefreshTTL           time.Duration
+	PasswordResetTTL     time.Duration
+	EmailVerificationTTL time.Duration
+	Kicker               EventKicker
+	Now                  func() time.Time
 }
 
 func NewService(cfg ServiceConfig) (*Service, error) {
@@ -93,17 +96,21 @@ func NewService(cfg ServiceConfig) (*Service, error) {
 	if cfg.PasswordResetTTL <= 0 {
 		return nil, errors.New("auth: password reset TTL must be positive")
 	}
+	if cfg.EmailVerificationTTL <= 0 {
+		return nil, errors.New("auth: email verification TTL must be positive")
+	}
 	now := cfg.Now
 	if now == nil {
 		now = time.Now
 	}
 	return &Service{
-		pool:             cfg.Pool,
-		tokens:           cfg.Tokens,
-		refreshTTL:       cfg.RefreshTTL,
-		passwordResetTTL: cfg.PasswordResetTTL,
-		kicker:           cfg.Kicker,
-		now:              now,
+		pool:                 cfg.Pool,
+		tokens:               cfg.Tokens,
+		refreshTTL:           cfg.RefreshTTL,
+		passwordResetTTL:     cfg.PasswordResetTTL,
+		emailVerificationTTL: cfg.EmailVerificationTTL,
+		kicker:               cfg.Kicker,
+		now:                  now,
 	}, nil
 }
 
@@ -209,6 +216,12 @@ func (s *Service) Register(ctx context.Context, in RegisterInput) (*AuthResult, 
 	}
 	refreshExpiry := s.now().Add(s.refreshTTL)
 
+	verifyToken, verifyHash, err := NewResetToken()
+	if err != nil {
+		return nil, httpx.Internal(err)
+	}
+	verifyExpiry := s.now().Add(s.emailVerificationTTL)
+
 	var user *User
 	var session *Session
 	err = db.InTx(ctx, s.pool, func(tx pgx.Tx) error {
@@ -236,7 +249,17 @@ func (s *Service) Register(ctx context.Context, in RegisterInput) (*AuthResult, 
 		if err != nil {
 			return fmt.Errorf("create session: %w", err)
 		}
-		return nil
+
+		if _, err := s.repo.CreateEmailVerificationToken(ctx, tx, created.ID, verifyHash, verifyExpiry); err != nil {
+			return fmt.Errorf("create verification token: %w", err)
+		}
+		_, err = outbox.Enqueue(ctx, tx, outbox.EventEmailVerificationRequested, map[string]any{
+			"user_id":      created.ID,
+			"email":        created.Email,
+			"verify_token": verifyToken,
+			"expires_at":   verifyExpiry.UTC().Format(time.RFC3339),
+		})
+		return err
 	})
 	if err != nil {
 		return nil, wrapDomainError(err)
@@ -246,6 +269,7 @@ func (s *Service) Register(ctx context.Context, in RegisterInput) (*AuthResult, 
 	if err != nil {
 		return nil, err
 	}
+	s.kick()
 	slog.InfoContext(ctx, "user registered", "user_id", user.ID)
 	return &AuthResult{User: toUserDTO(user), TokenPair: *pair}, nil
 }
@@ -571,6 +595,76 @@ func (s *Service) ResetPassword(ctx context.Context, token, newPassword string) 
 	if err != nil {
 		return wrapDomainError(err)
 	}
+	return nil
+}
+
+// VerifyEmail consumes a verification token and marks the account verified.
+// Login is never gated on this; the flag is informational for the client.
+func (s *Service) VerifyEmail(ctx context.Context, token string) error {
+	if token == "" {
+		return httpx.CodedError(http.StatusBadRequest, httpx.CodeBadRequest, "token is required")
+	}
+
+	err := db.InTx(ctx, s.pool, func(tx pgx.Tx) error {
+		claimed, err := s.repo.ClaimEmailVerificationToken(ctx, tx, HashOpaqueToken(token))
+		if err != nil {
+			if errors.Is(err, ErrNotFound) {
+				return httpx.CodedError(http.StatusBadRequest, CodeVerifyTokenInvalid,
+					"verification token is invalid, expired, or already used")
+			}
+			return err
+		}
+		if err := s.repo.MarkEmailVerified(ctx, tx, claimed.UserID); err != nil {
+			return fmt.Errorf("mark email verified: %w", err)
+		}
+		slog.InfoContext(ctx, "email verified", "user_id", claimed.UserID)
+		return nil
+	})
+	if err != nil {
+		return wrapDomainError(err)
+	}
+	return nil
+}
+
+// ResendEmailVerification issues a fresh token for the caller. Already-verified
+// accounts are a no-op so the endpoint cannot be used to spam the inbox.
+func (s *Service) ResendEmailVerification(ctx context.Context, userID uuid.UUID) error {
+	user, err := s.repo.GetUserByID(ctx, s.pool, userID)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return httpx.NotFound("user not found")
+		}
+		return httpx.Internal(fmt.Errorf("lookup user: %w", err))
+	}
+	if user.EmailVerifiedAt != nil {
+		return nil
+	}
+
+	token, tokenHash, err := NewResetToken()
+	if err != nil {
+		return httpx.Internal(err)
+	}
+	expiresAt := s.now().Add(s.emailVerificationTTL)
+
+	err = db.InTx(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := s.repo.InvalidateEmailVerificationTokens(ctx, tx, user.ID); err != nil {
+			return fmt.Errorf("invalidate previous verification tokens: %w", err)
+		}
+		if _, err := s.repo.CreateEmailVerificationToken(ctx, tx, user.ID, tokenHash, expiresAt); err != nil {
+			return fmt.Errorf("create verification token: %w", err)
+		}
+		_, err := outbox.Enqueue(ctx, tx, outbox.EventEmailVerificationRequested, map[string]any{
+			"user_id":      user.ID,
+			"email":        user.Email,
+			"verify_token": token,
+			"expires_at":   expiresAt.UTC().Format(time.RFC3339),
+		})
+		return err
+	})
+	if err != nil {
+		return wrapDomainError(err)
+	}
+	s.kick()
 	return nil
 }
 

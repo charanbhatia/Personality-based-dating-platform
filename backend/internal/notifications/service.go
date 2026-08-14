@@ -109,6 +109,7 @@ func (s *Service) OnMatchCreated(ctx context.Context, eventID string, e events.M
 		}
 		if created {
 			s.counters.increment(ctx, recipient)
+			s.wouldPush(recipient, "It's a match")
 		}
 	}
 	return nil
@@ -138,6 +139,7 @@ func (s *Service) OnMessageCreated(ctx context.Context, eventID string, e events
 	}
 	if created {
 		s.counters.increment(ctx, e.RecipientID)
+		s.wouldPush(e.RecipientID, name)
 	}
 	return nil
 }
@@ -162,4 +164,35 @@ func (s *Service) OnPasswordResetRequested(ctx context.Context, e events.Passwor
 			e.ResetToken,
 		),
 	})
+}
+
+func (s *Service) OnEmailVerificationRequested(ctx context.Context, e events.EmailVerificationRequested) error {
+	address := e.Email
+	if address == "" {
+		resolved, err := s.store.userEmail(ctx, e.UserID)
+		if err != nil {
+			return err
+		}
+		address = resolved
+	}
+
+	return s.mailer.Send(ctx, email.Message{
+		To:      address,
+		Subject: "Confirm your email",
+		Body: fmt.Sprintf(
+			"Use the link below to confirm your email. It expires at %s.\n\n%s/verify-email?token=%s\n",
+			e.ExpiresAt.UTC().Format("15:04 MST on 2 Jan 2006"),
+			s.cfg.AppBaseURL,
+			e.VerifyToken,
+		),
+	})
+}
+
+// wouldPush is the F22 push stub: FCM/APNs is out of MVP, but the call site
+// exists so a real pusher can replace this without hunting through consumers.
+func (s *Service) wouldPush(userID uuid.UUID, title string) {
+	if s.log == nil {
+		return
+	}
+	s.log.Info("would push", "user_id", userID, "title", title)
 }

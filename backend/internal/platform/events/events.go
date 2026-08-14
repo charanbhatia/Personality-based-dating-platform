@@ -21,12 +21,13 @@ const (
 
 // Event types.
 const (
-	TypeMatchCreated           = "match.created"
-	TypeUserBlocked            = "user.blocked"
-	TypeMessageCreated         = "message.created"
-	TypeMediaProcess           = "media.process"
-	TypeMediaProcessed         = "media.processed"
-	TypePasswordResetRequested = "auth.password_reset_requested"
+	TypeMatchCreated               = "match.created"
+	TypeUserBlocked                = "user.blocked"
+	TypeMessageCreated             = "message.created"
+	TypeMediaProcess               = "media.process"
+	TypeMediaProcessed             = "media.processed"
+	TypePasswordResetRequested     = "auth.password_reset_requested"
+	TypeEmailVerificationRequested = "auth.email_verification_requested"
 )
 
 type MatchCreated struct {
@@ -68,4 +69,11 @@ type PasswordResetRequested struct {
 	Email      string    `json:"email"`
 	ResetToken string    `json:"reset_token"`
 	ExpiresAt  time.Time `json:"expires_at"`
+}
+
+type EmailVerificationRequested struct {
+	UserID      uuid.UUID `json:"user_id"`
+	Email       string    `json:"email"`
+	VerifyToken string    `json:"verify_token"`
+	ExpiresAt   time.Time `json:"expires_at"`
 }

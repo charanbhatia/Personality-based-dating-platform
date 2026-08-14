@@ -329,6 +329,33 @@ func TestPasswordResetSendsMailWithTheToken(t *testing.T) {
 	}
 }
 
+func TestEmailVerificationSendsMailWithTheToken(t *testing.T) {
+	svc, pool, mail := newTestService(t)
+	ctx := context.Background()
+
+	user := testdb.CreateUser(t, pool, "verify@example.com", "Verify User")
+
+	err := svc.OnEmailVerificationRequested(ctx, events.EmailVerificationRequested{
+		UserID:      user,
+		Email:       "verify@example.com",
+		VerifyToken: "verify-456",
+		ExpiresAt:   time.Now().Add(24 * time.Hour),
+	})
+	if err != nil {
+		t.Fatalf("handle verification: %v", err)
+	}
+
+	if len(mail.sent) != 1 {
+		t.Fatalf("sent %d emails, want 1", len(mail.sent))
+	}
+	if mail.sent[0].To != "verify@example.com" {
+		t.Errorf("to = %q, want the user's address", mail.sent[0].To)
+	}
+	if !contains(mail.sent[0].Body, "verify-456") {
+		t.Errorf("body %q must carry the verification token", mail.sent[0].Body)
+	}
+}
+
 func bodies(items []Notification) []string {
 	out := make([]string, len(items))
 	for i, n := range items {

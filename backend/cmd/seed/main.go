@@ -326,8 +326,8 @@ func insertPerson(ctx context.Context, pool *pgxpool.Pool, p person, passwordHas
 	err := db.InTx(ctx, pool, func(tx pgx.Tx) error {
 		var userID uuid.UUID
 		err := tx.QueryRow(ctx, `
-			INSERT INTO users (email, password_hash, name, date_of_birth)
-			VALUES ($1, $2, $3, $4)
+			INSERT INTO users (email, password_hash, name, date_of_birth, email_verified_at)
+			VALUES ($1, $2, $3, $4, now())
 			ON CONFLICT (email) DO NOTHING
 			RETURNING id`, p.Email, passwordHash, p.Name, p.DateOfBirth).Scan(&userID)
 		if err != nil {
@@ -483,4 +483,3 @@ func seedMatches(ctx context.Context, pool *pgxpool.Pool, userCount, pairCount i
 	}
 	return matched, convos, nil
 }
-
