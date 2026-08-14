@@ -103,6 +103,11 @@ func scanConversation(row pgx.Row) (Conversation, error) {
 func (s *Store) listConversations(ctx context.Context, userID uuid.UUID, after *cursor.Keyset, limit int) ([]Conversation, error) {
 	q := conversationSelect + `
 	     WHERE (c.user1_id = $1 OR c.user2_id = $1)
+	       AND NOT EXISTS (
+	           SELECT 1 FROM blocks b
+	           WHERE (b.blocker_id = c.user1_id AND b.blocked_id = c.user2_id)
+	              OR (b.blocker_id = c.user2_id AND b.blocked_id = c.user1_id)
+	       )
 	       AND ($2::timestamptz IS NULL
 	            OR (COALESCE(c.last_message_at, c.created_at), c.id) < ($2::timestamptz, $3::uuid))
 	     ORDER BY activity_at DESC, c.id DESC

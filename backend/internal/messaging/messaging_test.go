@@ -187,9 +187,6 @@ func TestBlockedUsersCannotOpenOrUseConversations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create blocks: %v", err)
 	}
-	t.Cleanup(func() {
-		_, _ = pool.Exec(context.Background(), "DROP TABLE IF EXISTS blocks CASCADE")
-	})
 
 	if _, err := pool.Exec(ctx, `INSERT INTO blocks (blocker_id, blocked_id) VALUES ($1, $2)`, bob, alice); err != nil {
 		t.Fatalf("insert block: %v", err)
@@ -197,6 +194,14 @@ func TestBlockedUsersCannotOpenOrUseConversations(t *testing.T) {
 
 	if _, _, err := svc.Send(ctx, alice, conv.ID, "still there?", ""); !errors.Is(err, ErrBlocked) {
 		t.Errorf("send after block = %v, want ErrBlocked", err)
+	}
+
+	inbox, _, err := svc.ListConversations(ctx, alice, nil, 20)
+	if err != nil {
+		t.Fatalf("list after block: %v", err)
+	}
+	if len(inbox) != 0 {
+		t.Errorf("inbox still has %d conversations after a block; the thread must disappear", len(inbox))
 	}
 }
 
