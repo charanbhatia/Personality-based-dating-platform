@@ -48,9 +48,19 @@ export function ordinal(n) {
  * score is the same, or they are all the unscored sentinel, presenting an order
  * would invent a hierarchy the data does not contain.
  */
+export function scoreOf(item) {
+  const s = item?.compatibility_score ?? item?.score;
+  return typeof s === 'number' ? s : 0;
+}
+
+export function photoOf(item) {
+  if (!item) return '';
+  return item.photo_url || item.primary_photo_url || item.photo_urls?.[0] || '';
+}
+
 export function rank(matches = []) {
-  const list = [...matches].sort((a, b) => (b.score || 0) - (a.score || 0));
-  const scores = list.map((m) => m.score || 0);
+  const list = [...matches].sort((a, b) => scoreOf(b) - scoreOf(a));
+  const scores = list.map((m) => scoreOf(m));
   const spread = scores.length ? scores[0] - scores[scores.length - 1] : 0;
-  return { list, scores, spread, ranked: list.some((m) => isScored(m.score)) && spread >= 0.02 };
+  return { list, scores, spread, ranked: list.some((m) => isScored(scoreOf(m))) && spread >= 0.02 };
 }
