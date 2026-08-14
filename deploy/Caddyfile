@@ -1,0 +1,11 @@
+# Automatic HTTPS from Let's Encrypt; sslip.io resolves this name to the
+# instance IP, so the ACME HTTP challenge succeeds without any DNS setup.
+{$KINDRED_HOST} {
+	encode gzip
+
+	# WebSocket upgrades pass through unchanged.
+	reverse_proxy api:8080 {
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+	}
+}
