@@ -5,21 +5,21 @@ import { IconHeart, IconChat, IconUser, IconSpark, IconArrowLeft } from '../comp
 
 const features = [
   {
-    to: '/matches',
+    to: '/app/matches',
     icon: <IconHeart />,
     title: 'Discover matches',
     desc: 'See people whose personality and values line up with yours, ranked by real compatibility.',
     cta: 'Browse matches',
   },
   {
-    to: '/conversations',
+    to: '/app/conversations',
     icon: <IconChat />,
     title: 'Your conversations',
     desc: 'Pick up meaningful chats with people you actually connect with.',
     cta: 'Open messages',
   },
   {
-    to: '/profile',
+    to: '/app/profile',
     icon: <IconUser />,
     title: 'Shape your profile',
     desc: 'Tune your bio and details so we can find your kindred spirits.',

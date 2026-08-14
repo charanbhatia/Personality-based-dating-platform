@@ -1,4 +1,6 @@
 // Lightweight inline SVG icon set — stroke inherits currentColor.
+// Every icon here is decorative: it either sits beside a text label or inside a
+// control that carries its own aria-label, so it is hidden from assistive tech.
 const base = {
   width: 24,
   height: 24,
@@ -8,6 +10,8 @@ const base = {
   strokeWidth: 1.75,
   strokeLinecap: 'round',
   strokeLinejoin: 'round',
+  'aria-hidden': 'true',
+  focusable: 'false',
 };
 
 export function IconHeart(props) {
@@ -82,6 +86,15 @@ export function IconPin(props) {
     <svg {...base} {...props}>
       <path d="M12 21s7-6.3 7-11a7 7 0 1 0-14 0c0 4.7 7 11 7 11Z" />
       <circle cx="12" cy="10" r="2.5" />
+    </svg>
+  );
+}
+
+export function IconAlert(props) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7.5v5M12 16.2h.01" />
     </svg>
   );
 }

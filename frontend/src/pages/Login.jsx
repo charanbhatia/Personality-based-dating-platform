@@ -17,13 +17,12 @@ export default function Login() {
     setLoading(true);
     try {
       await login(email, password);
-      navigate('/');
+      navigate('/app');
     } catch (err) {
-      if (err.code === 'ERR_NETWORK' || err.message === 'Network Error') {
-        setError('Cannot reach server. Is the backend running at http://localhost:8080?');
-      } else {
-        setError(err.response?.data?.error || 'Login failed');
-      }
+      // Only errors that came back through the axios interceptor carry a message
+      // meant for a user; anything else (a storage quota error, a TypeError)
+      // would otherwise render its raw developer text in the form.
+      setError(err.response || err.code ? err.message : 'Login failed');
     } finally {
       setLoading(false);
     }
@@ -35,7 +34,7 @@ export default function Login() {
         <h1>Welcome back</h1>
         <p className="auth-sub">Log in to pick up where your connections left off.</p>
         <form onSubmit={handleSubmit}>
-          {error && <p className="alert alert-error error">{error}</p>}
+          {error && <div className="alert alert-error" role="alert">{error}</div>}
           <div className="field">
             <label htmlFor="email">Email</label>
             <input

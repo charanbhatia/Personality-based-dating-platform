@@ -3,7 +3,7 @@ import axios from 'axios';
 // In dev, use same origin so Vite proxy forwards /api to backend (no CORS)
 const baseURL = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? '' : 'http://localhost:8080');
 
-export const api = axios.create({
+const api = axios.create({
   baseURL,
   headers: { 'Content-Type': 'application/json' },
 });
@@ -14,14 +14,26 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// A 401 from the login/register endpoints means "bad credentials", not "session
+// expired" — redirecting there would reload the page and wipe the error the form
+// just set, leaving the user staring at a blank form.
+const isAuthAttempt = (url = '') =>
+  url.endsWith('/auth/login') || url.endsWith('/auth/register');
+
 api.interceptors.response.use(
   (r) => r,
   (err) => {
-    if (err.response?.status === 401) {
+    if (err.response?.status === 401 && !isAuthAttempt(err.config?.url)) {
       localStorage.removeItem('token');
-      localStorage.removeItem('user');
       window.location.href = '/login';
     }
+    // Normalize once here so callers can just render err.message instead of each
+    // re-deriving the same response/network/fallback ladder.
+    err.message =
+      err.response?.data?.error ||
+      (err.response
+        ? 'Something went wrong. Please try again.'
+        : 'Cannot reach the server. Check your connection and try again.');
     return Promise.reject(err);
   }
 );

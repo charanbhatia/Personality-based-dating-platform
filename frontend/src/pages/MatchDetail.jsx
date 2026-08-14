@@ -1,40 +1,34 @@
-import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { matches as matchesApi } from '../api';
+import useFetch from '../hooks/useFetch';
 import CompatibilityRing from '../components/CompatibilityRing';
 import Avatar from '../components/Avatar';
+import Loading from '../components/Loading';
+import ErrorState from '../components/ErrorState';
 import { IconChat, IconPin, IconUser } from '../components/Icons';
 
 export default function MatchDetail() {
   const { id } = useParams();
-  const [match, setMatch] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const { data: match, error, loading, retry } = useFetch(() => matchesApi.get(id), [id]);
 
-  useEffect(() => {
-    if (!id) return;
-    matchesApi
-      .get(id)
-      .then((res) => setMatch(res.data))
-      .catch(() => setMatch(null))
-      .finally(() => setLoading(false));
-  }, [id]);
+  if (loading) return <Loading text="Loading profile…" />;
 
-  if (loading)
-    return (
-      <div className="loading-page">
-        <div className="spinner" />
-        <p>Loading profile…</p>
-      </div>
-    );
-  if (!match)
+  // 404 means "this person is gone" and 400 means the :id isn't even a UUID —
+  // both are permanent, so offer a way out rather than a retry that can't win.
+  const status = error?.response?.status;
+  if (error)
     return (
       <div className="page">
-        <div className="empty-state">
-          <span className="empty-icon"><IconUser /></span>
-          <h3>Profile not found</h3>
-          <p>This person may no longer be available.</p>
-          <Link to="/matches" className="btn btn-ghost">Back to matches</Link>
-        </div>
+        {status === 404 || status === 400 ? (
+          <div className="empty-state">
+            <span className="empty-icon"><IconUser /></span>
+            <h3>Profile not found</h3>
+            <p>This person may no longer be available.</p>
+            <Link to="/app/matches" className="btn btn-ghost">Back to matches</Link>
+          </div>
+        ) : (
+          <ErrorState text="We couldn't load this profile right now." onRetry={retry} />
+        )}
       </div>
     );
 
@@ -45,10 +39,10 @@ export default function MatchDetail() {
       <div className="match-detail">
         <div className="match-detail-media">
           {match.photo_url ? (
-            <img src={match.photo_url} alt={match.name} />
+            <img src={match.photo_url} alt={match.name || ''} />
           ) : (
             <div className="match-media-fallback">
-              <Avatar name={match.name} seed={match.user_id} size={140} />
+              <Avatar name={match.name} seed={match.user_id} size={150} fill />
             </div>
           )}
         </div>
@@ -70,7 +64,11 @@ export default function MatchDetail() {
 
           {match.bio && <p className="bio">{match.bio}</p>}
 
-          <Link to={`/conversations/start/${match.user_id}`} className="btn btn-primary">
+          <Link
+            to={`/app/conversations/start/${match.user_id}`}
+            state={{ name: match.name, bio: match.bio }}
+            className="btn btn-primary"
+          >
             <IconChat /> Send a message
           </Link>
         </div>

@@ -1,31 +1,21 @@
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 
 /**
- * 3D tilt wrapper. Tracks the pointer and applies a perspective rotation plus a
- * light "glare" that follows the cursor. Falls back gracefully (no motion) for
- * users who prefer reduced motion, and is disabled on touch/coarse pointers.
+ * 3D tilt wrapper. Tracks the pointer and applies a perspective rotation.
+ *
+ * Whether it runs at all is decided in CSS (`@media (hover: hover) and
+ * (prefers-reduced-motion: no-preference)`), not here: matchMedia read once
+ * during render goes stale the moment someone toggles reduced motion or picks
+ * up a touchscreen, and it left the CSS hover states running on touch anyway.
  */
-export default function TiltCard({
-  children,
-  className = '',
-  max = 10,
-  glare = true,
-  style,
-  ...rest
-}) {
+export default function TiltCard({ children, className = '', max = 7, style, ...rest }) {
   const ref = useRef(null);
   const frame = useRef(0);
 
-  const prefersReduced =
-    typeof window !== 'undefined' &&
-    window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  const coarsePointer =
-    typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
-  const enabled = !prefersReduced && !coarsePointer;
+  useEffect(() => () => cancelAnimationFrame(frame.current), []);
 
   const handleMove = useCallback(
     (e) => {
-      if (!enabled) return;
       const el = ref.current;
       if (!el) return;
       cancelAnimationFrame(frame.current);
@@ -33,15 +23,11 @@ export default function TiltCard({
         const rect = el.getBoundingClientRect();
         const px = (e.clientX - rect.left) / rect.width;
         const py = (e.clientY - rect.top) / rect.height;
-        const rx = (0.5 - py) * max * 2;
-        const ry = (px - 0.5) * max * 2;
-        el.style.setProperty('--rx', `${rx.toFixed(2)}deg`);
-        el.style.setProperty('--ry', `${ry.toFixed(2)}deg`);
-        el.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`);
-        el.style.setProperty('--my', `${(py * 100).toFixed(1)}%`);
+        el.style.setProperty('--rx', `${((0.5 - py) * max * 2).toFixed(2)}deg`);
+        el.style.setProperty('--ry', `${((px - 0.5) * max * 2).toFixed(2)}deg`);
       });
     },
-    [enabled, max]
+    [max]
   );
 
   const reset = useCallback(() => {
@@ -55,16 +41,13 @@ export default function TiltCard({
   return (
     <div
       ref={ref}
-      className={`tilt ${enabled ? 'tilt--on' : ''} ${className}`}
+      className={`tilt ${className}`}
       onMouseMove={handleMove}
       onMouseLeave={reset}
       style={style}
       {...rest}
     >
-      <div className="tilt-inner">
-        {children}
-        {glare && enabled && <span className="tilt-glare" />}
-      </div>
+      <div className="tilt-inner">{children}</div>
     </div>
   );
 }

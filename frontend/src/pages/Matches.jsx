@@ -1,30 +1,21 @@
-import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { matches as matchesApi } from '../api';
+import { rank } from '../lib/compat';
+import useFetch from '../hooks/useFetch';
 import TiltCard from '../components/TiltCard';
 import CompatibilityRing from '../components/CompatibilityRing';
 import Avatar from '../components/Avatar';
+import Loading from '../components/Loading';
+import ErrorState from '../components/ErrorState';
 import { IconHeart, IconChat, IconPin, IconUser, IconSpark } from '../components/Icons';
 
 export default function Matches() {
-  const [list, setList] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { data, error, loading, retry } = useFetch(() => matchesApi.list());
+  // The API scores candidates but returns them in signup order, so the
+  // ranking the product promises has to happen here.
+  const { list } = rank(data?.matches || []);
 
-  useEffect(() => {
-    matchesApi
-      .list()
-      .then((res) => setList(res.data.matches || []))
-      .catch(() => setList([]))
-      .finally(() => setLoading(false));
-  }, []);
-
-  if (loading)
-    return (
-      <div className="loading-page">
-        <div className="spinner" />
-        <p>Finding your people…</p>
-      </div>
-    );
+  if (loading) return <Loading text="Finding your people…" />;
 
   return (
     <div className="page">
@@ -34,12 +25,14 @@ export default function Matches() {
       <h1>Your matches</h1>
       <p>People whose personality and preferences align with yours.</p>
 
-      {list.length === 0 ? (
+      {error ? (
+        <ErrorState text="We couldn't load your matches right now." onRetry={retry} />
+      ) : list.length === 0 ? (
         <div className="empty-state">
           <span className="empty-icon"><IconHeart /></span>
           <h3>No matches yet</h3>
           <p>Complete your profile to help us find people you'll genuinely click with.</p>
-          <Link to="/profile" className="btn btn-primary">Complete profile</Link>
+          <Link to="/app/profile" className="btn btn-primary">Complete profile</Link>
         </div>
       ) : (
         <div className="match-grid stagger">
@@ -50,13 +43,13 @@ export default function Matches() {
                 <article className="match-card">
                   <div className="match-media">
                     <span className="match-ring-badge">
-                      <CompatibilityRing value={score} size={64} stroke={6} />
+                      <CompatibilityRing value={score} size={50} stroke={4} label="" />
                     </span>
                     {m.photo_url ? (
-                      <img src={m.photo_url} alt={m.name} loading="lazy" />
+                      <img src={m.photo_url} alt={m.name || ''} loading="lazy" />
                     ) : (
                       <div className="match-media-fallback">
-                        <Avatar name={m.name} seed={m.user_id} size={96} />
+                        <Avatar name={m.name} seed={m.user_id} size={74} fill />
                       </div>
                     )}
                     <h3 className="match-name">{m.name}</h3>
@@ -72,10 +65,14 @@ export default function Matches() {
                     </div>
                     {m.bio && <p className="match-bio">{m.bio}</p>}
                     <div className="match-actions">
-                      <Link to={`/matches/${m.user_id}`} className="btn btn-ghost">
+                      <Link to={`/app/matches/${m.user_id}`} className="btn btn-ghost">
                         View
                       </Link>
-                      <Link to={`/conversations/start/${m.user_id}`} className="btn btn-primary">
+                      <Link
+                        to={`/app/conversations/start/${m.user_id}`}
+                        state={{ name: m.name, bio: m.bio }}
+                        className="btn btn-primary"
+                      >
                         <IconChat /> Message
                       </Link>
                     </div>
