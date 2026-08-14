@@ -335,6 +335,7 @@ func cors(cfg *config.Config) func(http.Handler) http.Handler {
 				if reflectAll || listed {
 					w.Header().Set("Access-Control-Allow-Origin", origin)
 					w.Header().Add("Vary", "Origin")
+					w.Header().Set("Access-Control-Allow-Credentials", "true")
 					w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 					w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Request-Id, Idempotency-Key")
 					w.Header().Set("Access-Control-Expose-Headers", "Deprecation, Link, X-Request-ID")

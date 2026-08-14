@@ -125,6 +125,7 @@ func New(cfg *config.Config, pool *pgxpool.Pool, opts Options) (*App, error) {
 		EmailVerificationTTL: cfg.EmailVerificationTTL,
 		Kicker:               drainer,
 		Now:                  opts.Now,
+		SecureCookies:        cfg.IsProduction(),
 	})
 	if err != nil {
 		return nil, err

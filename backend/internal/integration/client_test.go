@@ -361,12 +361,13 @@ func onboard(t *testing.T, opts onboardOptions) *user {
 }
 
 type discoverItem struct {
-	UserID             uuid.UUID `json:"user_id"`
-	Name               string    `json:"name"`
-	Age                *int      `json:"age"`
-	Gender             string    `json:"gender"`
-	CompatibilityScore float64   `json:"compatibility_score"`
-	PhotoURLs          []string  `json:"photo_urls"`
+	UserID             uuid.UUID          `json:"user_id"`
+	Name               string             `json:"name"`
+	Age                *int               `json:"age"`
+	Gender             string             `json:"gender"`
+	CompatibilityScore float64            `json:"compatibility_score"`
+	PhotoURLs          []string           `json:"photo_urls"`
+	Traits             map[string]float64 `json:"traits"`
 }
 
 type discoverPage struct {
