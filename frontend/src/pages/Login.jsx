@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { afterAuthPath } from '../lib/onboarding';
 import AuthShell from '../components/AuthShell';
 
 export default function Login() {
@@ -16,8 +17,8 @@ export default function Login() {
     setError('');
     setLoading(true);
     try {
-      await login(email, password);
-      navigate('/app');
+      const u = await login(email, password);
+      navigate(afterAuthPath(u));
     } catch (err) {
       // Only errors that came back through the axios interceptor carry a message
       // meant for a user; anything else (a storage quota error, a TypeError)
@@ -64,6 +65,8 @@ export default function Login() {
           </button>
         </form>
         <p className="auth-footer">
+          <Link to="/forgot-password">Forgot password?</Link>
+          <br />
           New to Kindred? <Link to="/register">Create an account</Link>
         </p>
       </div>

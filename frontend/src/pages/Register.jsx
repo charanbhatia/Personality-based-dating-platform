@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { afterAuthPath } from '../lib/onboarding';
 import AuthShell from '../components/AuthShell';
 
 export default function Register() {
@@ -18,10 +19,8 @@ export default function Register() {
     setError('');
     setLoading(true);
     try {
-      const payload = { email, password, name };
-      if (dateOfBirth) payload.date_of_birth = dateOfBirth;
-      await register(payload);
-      navigate('/app');
+      const u = await register({ email, password, name, date_of_birth: dateOfBirth });
+      navigate(afterAuthPath(u));
     } catch (err) {
       // See Login.jsx — only interceptor-normalized errors are safe to show.
       setError(err.response || err.code ? err.message : 'Registration failed');
@@ -70,6 +69,7 @@ export default function Register() {
               placeholder="Create a password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              minLength={8}
               required
             />
           </div>
@@ -81,6 +81,7 @@ export default function Register() {
               type="date"
               value={dateOfBirth}
               onChange={(e) => setDateOfBirth(e.target.value)}
+              required
             />
           </div>
           <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
