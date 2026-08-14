@@ -1,39 +1,32 @@
 import { Link } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { conversations as convApi, matches as matchesApi } from '../api';
-import useFetch from '../hooks/useFetch';
-import { band, isScored } from '../lib/compat';
+import { useQuery } from '@tanstack/react-query';
+import { conversations as convApi, qk } from '../api';
 import Avatar from '../components/Avatar';
-import Loading from '../components/Loading';
 import ErrorState from '../components/ErrorState';
+import VirtualList from '../components/VirtualList';
 import { IconChat, IconArrowLeft } from '../components/Icons';
 
-const day = (iso) =>
-  new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+const stamp = (iso) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+};
 
 export default function Conversations() {
-  const { user } = useAuth();
+  const { data, error, isPending, refetch } = useQuery({
+    queryKey: qk.conversations,
+    queryFn: () => convApi.list({ limit: 50 }).then((r) => r.data),
+  });
 
-  // The conversations payload carries only ids, so names come from the match
-  // list. A failure there costs us the names, not the page.
-  const { data, error, loading, retry } = useFetch(() =>
-    Promise.all([
-      convApi.list(),
-      matchesApi.list({ limit: 100 }).catch(() => ({ data: { matches: [] } })),
-    ]).then(([conv, people]) => ({
-      data: {
-        conversations: conv.data.conversations || [],
-        people: Object.fromEntries((people.data.matches || []).map((m) => [m.user_id, m])),
-      },
-    }))
-  );
+  if (isPending) {
+    return (
+      <div className="page">
+        {[0, 1, 2, 3].map((n) => <div key={n} className="skeleton-row" />)}
+      </div>
+    );
+  }
 
-  if (loading) return <Loading text="Loading messages…" />;
-
-  const list = [...(data?.conversations || [])].sort(
-    (a, b) => new Date(b.created_at) - new Date(a.created_at)
-  );
-  const people = data?.people || {};
+  const list = data?.items || [];
 
   return (
     <div className="page">
@@ -44,47 +37,53 @@ export default function Conversations() {
       <p>The people you have started talking to.</p>
 
       {error ? (
-        <ErrorState text="We couldn't load your conversations right now." onRetry={retry} />
+        <ErrorState text="We couldn't load your conversations right now." onRetry={() => refetch()} />
       ) : list.length === 0 ? (
         <div className="empty-state">
           <span className="empty-icon"><IconChat /></span>
           <h3>No conversations yet</h3>
-          <p>When you message someone, your chats will show up here.</p>
+          <p>Match with someone, then your chats will show up here.</p>
           <Link to="/app/matches" className="btn btn-primary">Find someone to talk to</Link>
         </div>
       ) : (
-        <ul className="conv-list stagger">
-          {list.map((c) => {
-            const otherId = c.user1_id === user?.id ? c.user2_id : c.user1_id;
-            const peer = people[otherId];
+        <VirtualList count={list.length} estimateSize={76}>
+          {(i) => {
+            const c = list[i];
+            const peer = c.peer || {};
+            const when = c.last_message_at || c.created_at;
             return (
-              <li key={c.id}>
-                <Link
-                  to={`/app/conversations/${c.id}`}
-                  state={{ name: peer?.name, bio: peer?.bio }}
-                  className="conv-item"
-                >
-                  <Avatar
-                    name={peer?.name}
-                    src={peer?.photo_url || undefined}
-                    seed={otherId}
-                    size={44}
-                  />
-                  <span className="conv-text">
-                    <span className="conv-title">{peer?.name || 'Conversation'}</span>
-                    <span className="conv-sub">
-                      Started {day(c.created_at)}
-                      {peer && isScored(peer.score) ? ` · ${band(peer.score)}` : ''}
-                    </span>
+              <Link
+                to={`/app/conversations/${c.id}`}
+                state={{
+                  name: peer.name,
+                  bio: peer.bio,
+                  photo_url: peer.photo_url,
+                  user_id: peer.user_id,
+                }}
+                className="conv-item"
+              >
+                <Avatar
+                  name={peer.name}
+                  src={peer.photo_url || undefined}
+                  seed={peer.user_id || c.id}
+                  size={44}
+                />
+                <span className="conv-text">
+                  <span className="conv-title">
+                    {peer.name || 'Conversation'}
+                    {c.unread_count > 0 ? ` · ${c.unread_count}` : ''}
                   </span>
-                  <span className="conv-arrow">
-                    <IconArrowLeft style={{ transform: 'rotate(180deg)' }} />
+                  <span className="conv-sub">
+                    {c.last_message_preview || (when ? `Started ${stamp(when)}` : 'No messages yet')}
                   </span>
-                </Link>
-              </li>
+                </span>
+                <span className="conv-arrow">
+                  <IconArrowLeft style={{ transform: 'rotate(180deg)' }} />
+                </span>
+              </Link>
             );
-          })}
-        </ul>
+          }}
+        </VirtualList>
       )}
     </div>
   );
