@@ -17,8 +17,11 @@ import (
 )
 
 // CodeMediaUnavailable is returned when a client submits media asset ids but
-// Person C's media service is not wired up yet.
+// the media service is not wired up.
 const CodeMediaUnavailable = "media_unavailable"
+
+// CodeAssetNotReady is returned when an uploaded asset has not finished processing.
+const CodeAssetNotReady = "asset_not_ready"
 
 // Pool is the database surface the service needs.
 type Pool interface {
@@ -28,9 +31,8 @@ type Pool interface {
 
 // MediaResolver turns Person C's media asset ids into public URLs.
 //
-// This is the seam for roadmap F06/F20: until the media service exists the
-// resolver is nil and the API accepts HTTPS URLs directly, as agreed in the
-// person-B spec.
+// Nil means PUT /profile/photos accepts HTTPS URLs only and rejects asset_ids
+// with 501 media_unavailable.
 type MediaResolver interface {
 	ResolveAssetURLs(ctx context.Context, userID uuid.UUID, assetIDs []uuid.UUID) ([]string, error)
 }
@@ -211,7 +213,7 @@ func (s *Service) resolveAssets(ctx context.Context, userID uuid.UUID, rawIDs []
 	}
 	urls, err := s.media.ResolveAssetURLs(ctx, userID, ids)
 	if err != nil {
-		return nil, httpx.Internal(fmt.Errorf("resolve media assets: %w", err))
+		return nil, err
 	}
 	return ValidatePhotoURLs(urls)
 }

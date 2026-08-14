@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -369,15 +370,38 @@ func TestPhotoGalleryRequiresExactlyOneSource(t *testing.T) {
 	}).requireStatus(t, http.StatusBadRequest)
 }
 
-func TestPhotoAssetIDsReportMediaUnavailable(t *testing.T) {
+func TestPhotoAssetIDsRejectUnknownAssets(t *testing.T) {
 	resetDB(t)
 	u := register(t, "Assets", "1994-05-05")
 
-	// Person C's media service is not wired up in this configuration; the API
-	// must say so rather than fail obscurely.
 	do(t, http.MethodPut, "/api/v1/profile/photos", u.Token,
 		map[string]any{"asset_ids": []string{uuid.NewString()}}).
-		requireError(t, http.StatusNotImplemented, profile.CodeMediaUnavailable)
+		requireError(t, http.StatusNotFound, "not_found")
+}
+
+func TestPhotoAssetIDsResolveReadyOwnedAssets(t *testing.T) {
+	resetDB(t)
+	u := register(t, "Gallery", "1994-05-05")
+	other := register(t, "Other", "1994-05-05")
+
+	ready := insertReadyAsset(t, u.ID, "https://cdn.example.test/from-asset.jpg")
+	foreign := insertReadyAsset(t, other.ID, "https://cdn.example.test/foreign.jpg")
+	pending := insertAsset(t, u.ID, "pending", "")
+
+	var dto profileDTO
+	do(t, http.MethodPut, "/api/v1/profile/photos", u.Token,
+		map[string]any{"asset_ids": []string{ready.String()}}).
+		requireStatus(t, http.StatusOK).decode(t, &dto)
+	if len(dto.PhotoURLs) != 1 || dto.PhotoURLs[0] != "https://cdn.example.test/from-asset.jpg" {
+		t.Fatalf("photo_urls = %v, want the resolved asset URL", dto.PhotoURLs)
+	}
+
+	do(t, http.MethodPut, "/api/v1/profile/photos", u.Token,
+		map[string]any{"asset_ids": []string{foreign.String()}}).
+		requireError(t, http.StatusNotFound, "not_found")
+	do(t, http.MethodPut, "/api/v1/profile/photos", u.Token,
+		map[string]any{"asset_ids": []string{pending.String()}}).
+		requireError(t, http.StatusConflict, profile.CodeAssetNotReady)
 }
 
 func TestProfileOptionsDescribeTheContract(t *testing.T) {
@@ -417,4 +441,22 @@ func TestProfileUpdateCannotChangeAnotherUser(t *testing.T) {
 	if got := getProfile(t, victim).Bio; got == "attacker bio" {
 		t.Fatal("one user's update modified another's profile")
 	}
+}
+
+func insertReadyAsset(t *testing.T, userID uuid.UUID, url string) uuid.UUID {
+	t.Helper()
+	return insertAsset(t, userID, "ready", url)
+}
+
+func insertAsset(t *testing.T, userID uuid.UUID, status, originalURL string) uuid.UUID {
+	t.Helper()
+	id := uuid.New()
+	_, err := testPool.Exec(context.Background(), `
+		INSERT INTO media_assets (id, user_id, status, content_type, original_key, original_url, thumb_url)
+		VALUES ($1, $2, $3, 'image/jpeg', $4, NULLIF($5, ''), NULLIF($5, ''))`,
+		id, userID, status, "public/users/"+userID.String()+"/"+id.String()+"/original", originalURL)
+	if err != nil {
+		t.Fatalf("insert media asset: %v", err)
+	}
+	return id
 }

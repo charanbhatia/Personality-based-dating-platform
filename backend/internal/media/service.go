@@ -19,6 +19,7 @@ var (
 	ErrUploadMissing      = errors.New("no uploaded object found for this asset")
 	ErrAlreadySubmitted   = errors.New("asset has already been submitted for processing")
 	ErrStorageUnavailable = errors.New("media storage is not configured")
+	ErrAssetNotReady      = errors.New("media asset is not ready")
 )
 
 type Publisher interface {
@@ -134,6 +135,30 @@ func (s *Service) Complete(ctx context.Context, userID, assetID uuid.UUID) (Asse
 
 func (s *Service) Get(ctx context.Context, userID, assetID uuid.UUID) (Asset, error) {
 	return s.owned(ctx, userID, assetID)
+}
+
+// ResolveAssetURLs turns owned, ready assets into public URLs in the given
+// order. It is the profile gallery's media port.
+func (s *Service) ResolveAssetURLs(ctx context.Context, userID uuid.UUID, assetIDs []uuid.UUID) ([]string, error) {
+	urls := make([]string, 0, len(assetIDs))
+	for _, id := range assetIDs {
+		asset, err := s.Get(ctx, userID, id)
+		if err != nil {
+			return nil, err
+		}
+		if asset.Status != StatusReady {
+			return nil, ErrAssetNotReady
+		}
+		url := asset.OriginalURL
+		if url == "" {
+			url = asset.ThumbURL
+		}
+		if url == "" {
+			return nil, ErrAssetNotReady
+		}
+		urls = append(urls, url)
+	}
+	return urls, nil
 }
 
 func (s *Service) Delete(ctx context.Context, userID, assetID uuid.UUID) error {
