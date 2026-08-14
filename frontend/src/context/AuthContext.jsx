@@ -1,52 +1,95 @@
-import { createContext, useContext, useState, useEffect } from 'react';
-import { auth as authApi } from '../api';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import {
+  auth as authApi,
+  persistTokens,
+  clearTokens,
+  restoreSession,
+  hasSession,
+  sessionUser,
+  sessionSocket,
+} from '../api';
+import { registerWebDevice, unregisterWebDevice } from '../lib/push';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  // No token means there is nothing to verify, so we are never in a loading state.
-  const [loading, setLoading] = useState(() => Boolean(localStorage.getItem('token')));
+  const [loading, setLoading] = useState(() => hasSession());
+
+  const refreshUser = useCallback(async () => {
+    const res = await authApi.me();
+    const u = sessionUser(res.data);
+    setUser(u);
+    return u;
+  }, []);
 
   useEffect(() => {
-    if (!localStorage.getItem('token')) return;
-    authApi
-      .me()
-      .then((res) => setUser(res.data))
-      .catch((err) => {
-        // Only a genuine 401 means the token is dead. A network blip or a
-        // restarted backend must not silently sign the user out.
-        if (err.response?.status === 401) localStorage.removeItem('token');
-      })
-      .finally(() => setLoading(false));
+    let alive = true;
+    (async () => {
+      const ok = await restoreSession();
+      if (!ok) {
+        if (alive) setLoading(false);
+        return;
+      }
+      try {
+        const res = await authApi.me();
+        if (alive) setUser(sessionUser(res.data));
+      } catch (err) {
+        if (err.response?.status === 401) clearTokens();
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
   }, []);
+
+  useEffect(() => {
+    if (!user?.id) {
+      sessionSocket.disconnect();
+      return undefined;
+    }
+    sessionSocket.connect();
+    registerWebDevice().catch(() => {});
+    return undefined;
+  }, [user?.id]);
+
+  const applyAuth = async (data) => {
+    persistTokens(data);
+    try {
+      return await refreshUser();
+    } catch {
+      const u = sessionUser(data);
+      setUser(u);
+      return u;
+    }
+  };
 
   const login = async (email, password) => {
     const res = await authApi.login({ email, password });
-    const { user: u, token } = res.data;
-    localStorage.setItem('token', token);
-    setUser(u);
-    return u;
+    return applyAuth(res.data);
   };
 
   const register = async (data) => {
     const res = await authApi.register(data);
-    const { user: u, token } = res.data;
-    localStorage.setItem('token', token);
-    setUser(u);
-    return u;
+    return applyAuth(res.data);
   };
 
-  const logout = () => {
-    localStorage.removeItem('token');
-    // Nothing writes 'user' any more, but earlier builds cached name/email
-    // there. Drain it as existing sessions cycle rather than leaving PII behind.
-    localStorage.removeItem('user');
+  const logout = async () => {
+    try {
+      await authApi.logout();
+    } catch {
+      // Client still has to drop the session even if the server is gone.
+    }
+    sessionSocket.disconnect();
+    unregisterWebDevice().catch(() => {});
+    clearTokens();
     setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, refreshUser, setUser }}>
       {children}
     </AuthContext.Provider>
   );
